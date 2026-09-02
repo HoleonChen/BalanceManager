@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
 
@@ -15,6 +16,25 @@ internal sealed record AccountRow(
 /// <summary>账户查询(记账下拉、账户视图共用)。</summary>
 internal static class Accounts
 {
+    /// <summary>新建账户(账户表不预置,由用户/导入创建);sort_order 取末位+1。</summary>
+    public static long Insert(LedgerSession s, string name, string type, string platform, long balanceBaseCents)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO accounts (name, platform, type, enabled, balance_base_cents, balance_date, sort_order)
+VALUES ($name, $platform, $type, 1, $base, $bd,
+        COALESCE((SELECT MAX(sort_order) FROM accounts) + 1, 0));";
+        cmd.Parameters.AddWithValue("$name", name);
+        cmd.Parameters.AddWithValue("$platform", platform);
+        cmd.Parameters.AddWithValue("$type", type);
+        cmd.Parameters.AddWithValue("$base", balanceBaseCents);
+        cmd.Parameters.AddWithValue("$bd", balanceBaseCents == 0 ? DBNull.Value : DateTime.Now.ToString("yyyy-MM-dd"));
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = "SELECT last_insert_rowid();";
+        return System.Convert.ToInt64(cmd.ExecuteScalar());
+    }
+
     /// <summary>列出启用账户,按 sort_order 排。</summary>
     public static IReadOnlyList<AccountRow> ListEnabled(LedgerSession s)
     {
