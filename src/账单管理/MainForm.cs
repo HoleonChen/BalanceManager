@@ -693,7 +693,7 @@ internal sealed class MainForm : Form
     private static void ShowAbout()
     {
         MessageBox.Show(
-            "账单管理 0.1.0(骨架)\n\n个人离线账本:SQLCipher 全库加密,\n按「记账周期」管理收支。\n\n开发:macOS 编写 → Windows 编译运行",
+            "账单管理 0.1.0\n\n个人离线账本:SQLCipher 全库加密,口令即密钥。\n\n已具备:记收支/转账(本金+Δ)/记账周期自动归属/\n账户管理(停用·启用)/就地编辑·作废/周期流水总览。\n\n开发:macOS 编写 → Windows 编译运行",
             "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
