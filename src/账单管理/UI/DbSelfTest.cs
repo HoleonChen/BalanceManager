@@ -127,9 +127,32 @@ internal static class DbSelfTest
             throw new Exception("周期外流水被错误归属。");
         steps.Add("周期外流水保持未归属");
 
-        // 作废:撤出列表与合计
+        // 转账:本金 500 转出,实收 500.5(理财结算 Δ+0.5)——
+        // 转入 B,kind/本金/Δ 应如写存,且不计入收支合计
+        var tx = Transactions.Transfer(s, new TransferDraft
+        {
+            Date = date,
+            FromAccountId = accountB,
+            ToAccountId = accountA,
+            PrincipalCents = 50000,
+            DeltaCents = 50,
+            Kind = "理财结算",
+            Note = "",
+            InPool = false
+        });
+        var shown = Transactions.ListByDate(s, date);
+        var txRow = shown.FirstOrDefault(x => x.Direction == "transfer");
+        if (txRow is null || txRow.Id != tx || txRow.AccountTo == ""
+            || txRow.DeltaCents != 50 || txRow.Kind != "理财结算")
+            throw new Exception("转账写入/展示字段不符。");
+        var (outAll, inAll) = Transactions.DayTotals(s, date);
+        if (outAll != 0 || inAll != 0)
+            throw new Exception("转账被错误计入收支合计。");
+        steps.Add("转账:本金/Δ/类别存库,收支合计不受影响");
+
+        // 作废:支出一笔撤出列表与合计(转账仍在,但不影响收支合计)
         Transactions.Cancel(s, id);
-        if (Transactions.ListByDate(s, date).Count != 0)
+        if (Transactions.ListByDate(s, date).FirstOrDefault(x => x.Id == id) is not null)
             throw new Exception("作废后仍出现在流水列表。");
         var (outAfter, _) = Transactions.DayTotals(s, date);
         if (outAfter != 0)

@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 namespace ZhangDan;
 
-/// <summary>待写入的一笔流水(本阶段仅支出/收入;转账单独实现)。</summary>
+/// <summary>待写入的一笔流水(支出/收入)。</summary>
 internal sealed class TxnDraft
 {
     public required string Date { get; init; }        // yyyy-MM-dd
@@ -18,22 +18,38 @@ internal sealed class TxnDraft
     public bool InPool { get; init; } = true;
 }
 
-/// <summary>流水展示行(带账户/分类名、时间 HH:mm)。</summary>
+/// <summary>待写入的一笔转账(direction='transfer')。本金转出,转入 = 本金 + 浮动。</summary>
+internal sealed class TransferDraft
+{
+    public required string Date { get; init; }        // yyyy-MM-dd
+    public required long FromAccountId { get; init; }
+    public required long ToAccountId { get; init; }
+    public required long PrincipalCents { get; init; }
+    public long DeltaCents { get; init; }             // +记收益 / -记手续费,默认 0
+    public required string Kind { get; init; }        // 互转/充值/提现/理财结算/存取
+    public string Note { get; init; } = "";
+    public bool InPool { get; init; }                 // 转出池账户默认不计池,可勾
+}
+
+/// <summary>流水展示行(带账户/分类名、时间 HH:mm;转账含对端账户/浮动/类别)。</summary>
 internal sealed class TxnListItem
 {
     public long Id { get; init; }
-    public required string Direction { get; init; }
-    public long AmountCents { get; init; }
+    public required string Direction { get; init; }   // in | out | transfer
+    public long AmountCents { get; init; }            // 转账=本金
     public required string Name { get; init; }
-    public string Account { get; init; } = "";
+    public string Account { get; init; } = "";        // 转账=转出账户
+    public string AccountTo { get; init; } = "";      // 转账=转入账户
     public string Category { get; init; } = "";
+    public string Kind { get; init; } = "";           // 转账类别(互转/充值/…)
+    public long DeltaCents { get; init; }             // 转账浮动
     public string Time { get; init; } = "";
 }
 
-/// <summary>流水写读(记账、今日列表、合计)。</summary>
+/// <summary>流水写读(记账、单日流水、合计、作废)。</summary>
 internal static class Transactions
 {
-    /// <summary>插入一笔,返回自增 id。</summary>
+    /// <summary>插入一笔支出/收入,按日期自动归属进行中周期,返回自增 id。</summary>
     public static long Add(LedgerSession s, TxnDraft t)
     {
         using var cmd = s.Connection.CreateCommand();
@@ -63,6 +79,36 @@ VALUES
         return Convert.ToInt64(cmd.ExecuteScalar());
     }
 
+    /// <summary>插入一笔转账(direction='transfer');转出 −本金,转入 +(本金+浮动)。</summary>
+    public static long Transfer(LedgerSession s, TransferDraft t)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO transactions
+  (period_id, date, account_id, to_account_id, name, note, amount_cents,
+   direction, source, status, in_pool, principal_cents, delta_cents, transfer_kind, created_at)
+VALUES
+  ((SELECT id FROM periods WHERE status = 'active'
+     AND start_date <= $date AND (end_date IS NULL OR end_date >= $date)
+     ORDER BY start_date DESC, id DESC LIMIT 1),
+   $date, $from, $to, $name, $note, $principal, 'transfer',
+   'manual', 'normal', $pool, $principal, $delta, $kind, $created);";
+        cmd.Parameters.AddWithValue("$date", t.Date);
+        cmd.Parameters.AddWithValue("$from", t.FromAccountId);
+        cmd.Parameters.AddWithValue("$to", t.ToAccountId);
+        cmd.Parameters.AddWithValue("$name", t.Kind);   // 名称=类别;列表「账户 A→B」已示路径
+        cmd.Parameters.AddWithValue("$note", t.Note);
+        cmd.Parameters.AddWithValue("$principal", t.PrincipalCents);
+        cmd.Parameters.AddWithValue("$delta", t.DeltaCents);
+        cmd.Parameters.AddWithValue("$kind", t.Kind);
+        cmd.Parameters.AddWithValue("$pool", t.InPool ? 1 : 0);
+        cmd.Parameters.AddWithValue("$created", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = "SELECT last_insert_rowid();";
+        return Convert.ToInt64(cmd.ExecuteScalar());
+    }
+
     /// <summary>作废一笔(软删:置 status='cancelled',流水与合计均不再计入,记录仍留库备查)。</summary>
     public static void Cancel(LedgerSession s, long id)
     {
@@ -72,18 +118,20 @@ VALUES
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>某日流水(非转账、非取消),按录入倒序。</summary>
+    /// <summary>某日流水(支出/收入/转账;非取消),按录入倒序。</summary>
     public static IReadOnlyList<TxnListItem> ListByDate(LedgerSession s, string date)
     {
         var list = new List<TxnListItem>();
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 SELECT t.id, t.direction, t.amount_cents, t.name,
-       a.name, c.name, substr(t.created_at, 12, 5)
+       a.name, c.name, substr(t.created_at, 12, 5),
+       b.name, t.delta_cents, t.transfer_kind
 FROM transactions t
 LEFT JOIN accounts a   ON a.id  = t.account_id
+LEFT JOIN accounts b   ON b.id  = t.to_account_id
 LEFT JOIN categories c ON c.id  = t.category_id
-WHERE t.date = $date AND t.direction <> 'transfer' AND t.status <> 'cancelled'
+WHERE t.date = $date AND t.status <> 'cancelled'
 ORDER BY t.id DESC;";
         cmd.Parameters.AddWithValue("$date", date);
 
@@ -98,7 +146,10 @@ ORDER BY t.id DESC;";
                 Name = r.GetString(3),
                 Account = r.IsDBNull(4) ? string.Empty : r.GetString(4),
                 Category = r.IsDBNull(5) ? string.Empty : r.GetString(5),
-                Time = r.IsDBNull(6) ? string.Empty : r.GetString(6)
+                Time = r.IsDBNull(6) ? string.Empty : r.GetString(6),
+                AccountTo = r.IsDBNull(7) ? string.Empty : r.GetString(7),
+                DeltaCents = r.IsDBNull(8) ? 0 : r.GetInt64(8),
+                Kind = r.IsDBNull(9) ? string.Empty : r.GetString(9)
             });
         }
         return list;

@@ -114,6 +114,16 @@ internal sealed class MainForm : Form
         };
         record.Click += (_, _) => OnRecordOne();
 
+        var transfer = new Button
+        {
+            Text = "⇄ 转账",
+            Width = 96,
+            Height = 32,
+            Margin = new Padding(0, 0, 14, 0),
+            Font = new Font("Microsoft YaHei UI", 11f)
+        };
+        transfer.Click += (_, _) => OnTransfer();
+
         var prev = new Button { Text = "◀", Width = 34, Height = 30 };
         prev.Click += (_, _) => { _viewDate = _viewDate.AddDays(-1); RefreshView(); };
 
@@ -145,7 +155,7 @@ internal sealed class MainForm : Form
             Margin = new Padding(12, 8, 0, 0)
         };
 
-        top.Controls.AddRange(new Control[] { record, prev, _dateLabel, next, today, _periodChip, _summaryLabel });
+        top.Controls.AddRange(new Control[] { record, transfer, prev, _dateLabel, next, today, _periodChip, _summaryLabel });
 
         _todayList = new ListView
         {
@@ -377,6 +387,40 @@ internal sealed class MainForm : Form
         }
     }
 
+    /// <summary>记转账:转出 −本金、转入 +(本金+浮动),保存后跳到该笔日期。</summary>
+    private void OnTransfer()
+    {
+        if (_ledger is null)
+            return;
+
+        using var dlg = new TransferDialog(_ledger, _settings);
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            Transactions.Transfer(_ledger, new TransferDraft
+            {
+                Date = dlg.Date.ToString("yyyy-MM-dd"),
+                FromAccountId = dlg.FromAccountId,
+                ToAccountId = dlg.ToAccountId,
+                PrincipalCents = dlg.PrincipalCents,
+                DeltaCents = dlg.DeltaCents,
+                Kind = dlg.Kind,
+                Note = dlg.Note,
+                InPool = dlg.InPool
+            });
+
+            _viewDate = dlg.Date.Date;
+            RefreshView();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"保存失败:\n{ex.Message}", "账单管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     /// <summary>刷新当前查看日期(_viewDate)的日期标注 + 流水列表 + 合计。</summary>
     private void RefreshView()
     {
@@ -403,14 +447,33 @@ internal sealed class MainForm : Form
         {
             var li = new ListViewItem(t.Time);
             li.Tag = t;
-            li.SubItems.Add(t.Name);
-            li.SubItems.Add(t.Category);
-            li.SubItems.Add(t.Account);
-            var isOut = t.Direction == "out";
-            var amountSub = li.SubItems.Add(isOut
-                ? "-" + Money.Yuan(t.AmountCents)
-                : "+" + Money.Yuan(t.AmountCents));
-            amountSub.ForeColor = isOut ? Color.Firebrick : Color.ForestGreen;
+
+            if (t.Direction == "transfer")
+            {
+                // 转账:名称=类别,账户列显示 转出→转入,金额=本金,浮动(Δ)附注
+                li.SubItems.Add(t.Name);
+                li.SubItems.Add("转账");
+                li.SubItems.Add($"{t.Account} → {t.AccountTo}");
+                var text = Money.Yuan(t.AmountCents);
+                if (t.DeltaCents != 0)
+                {
+                    var sign = t.DeltaCents > 0 ? "+" : "-";
+                    text += $" (Δ{sign}{Money.Yuan(Math.Abs(t.DeltaCents))})";
+                }
+                var sub = li.SubItems.Add(text);
+                sub.ForeColor = Color.DarkSlateBlue;
+            }
+            else
+            {
+                li.SubItems.Add(t.Name);
+                li.SubItems.Add(t.Category);
+                li.SubItems.Add(t.Account);
+                var isOut = t.Direction == "out";
+                var amountSub = li.SubItems.Add(isOut
+                    ? "-" + Money.Yuan(t.AmountCents)
+                    : "+" + Money.Yuan(t.AmountCents));
+                amountSub.ForeColor = isOut ? Color.Firebrick : Color.ForestGreen;
+            }
             _todayList.Items.Add(li);
         }
         _todayList.EndUpdate();
@@ -426,9 +489,11 @@ internal sealed class MainForm : Form
         if (_todayList.SelectedItems[0].Tag is not TxnListItem t)
             return;
 
-        var sign = t.Direction == "out" ? "-" : "+";
+        string head = t.Direction == "transfer"
+            ? $"作废这笔转账?\n\n  {t.Name} · {t.Account} → {t.AccountTo}\n  {Money.Yuan(t.AmountCents)}"
+            : $"作废这笔并撤出统计?\n\n  {t.Name}\n  {(t.Direction == "out" ? "-" : "+")}{Money.Yuan(t.AmountCents)} · {t.Account}";
         if (MessageBox.Show(this,
-                $"作废这笔并撤出统计?\n\n  {t.Name}\n  {sign}{Money.Yuan(t.AmountCents)} · {t.Account}\n\n记录仍留在库中(标记作废),只是不再计入统计。",
+                head + "\n\n记录仍留在库中(标记作废),只是不再计入统计。",
                 "作废流水", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
             return;
 

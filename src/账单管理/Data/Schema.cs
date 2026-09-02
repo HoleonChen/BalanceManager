@@ -9,7 +9,7 @@ namespace ZhangDan;
 /// </summary>
 internal static class Schema
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     // 注意:Microsoft.Data.Sqlite 一条命令只执行首条语句,故统一按 ';' 切分逐条执行。
     private const string Ddl = @"
@@ -142,6 +142,13 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order) VALUES
             ExecEach(conn, Seed);           // 预设分类(收支)
             SetMeta(conn, "ledger.name", ledgerName);
             SetMeta(conn, "created_at", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+        }
+
+        if (version < 2)
+        {
+            // v2:转账类别(设计 §3.5 五类:互转/充值/提现/理财结算/存取),
+            // 与收支分类分开存,避免污染手动录入的收支分类列表
+            ExecEach(conn, "ALTER TABLE transactions ADD COLUMN transfer_kind TEXT;");
         }
 
         if (version < CurrentVersion)
