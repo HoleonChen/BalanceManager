@@ -87,25 +87,21 @@ internal sealed class PeriodCreateDialog : Window
             }
         }
 
-        // 初始收入行
-        var incomeFields = new DockPanel { Margin = new Thickness(28, 0, 0, 0) };
-        var incomeHint = new TextBlock { Text = "账户 / 收入分类 / 金额", Foreground = Brushes.Gray, Width = 170, VerticalAlignment = VerticalAlignment.Center };
-        DockPanel.SetDock(incomeHint, Dock.Left);
-        incomeFields.Children.Add(incomeHint);
-        incomeFields.Children.Add(_incomeAmount);
-        incomeFields.Children.Add(_incomeCat);
-        incomeFields.Children.Add(_incomeAccount);
-        _incomeBody.Children.Add(incomeFields);
+        // 初始收入:逐字段一行
+        _incomeAmount.Width = 160;
+        _incomeCat.Width = 300;
+        _incomeAccount.Width = 300;
+        _incomeBody.Children.Add(SubField("账户", _incomeAccount));
+        _incomeBody.Children.Add(SubField("收入分类", _incomeCat));
+        _incomeBody.Children.Add(SubField("金额(元)", _incomeAmount));
 
-        // 资金池行
-        var poolFields = new DockPanel { Margin = new Thickness(28, 0, 0, 0) };
-        var poolHint = new TextBlock { Text = "池账户 / 预算 / 保留(元)", Foreground = Brushes.Gray, Width = 170, VerticalAlignment = VerticalAlignment.Center };
-        DockPanel.SetDock(poolHint, Dock.Left);
-        poolFields.Children.Add(poolHint);
-        poolFields.Children.Add(_reserveBox);
-        poolFields.Children.Add(_budgetBox);
-        poolFields.Children.Add(_poolAccount);
-        _poolBody.Children.Add(poolFields);
+        // 资金池:逐字段一行
+        _budgetBox.Width = 160;
+        _reserveBox.Width = 160;
+        _poolAccount.Width = 300;
+        _poolBody.Children.Add(SubField("池账户", _poolAccount));
+        _poolBody.Children.Add(SubField("预算(元)", _budgetBox));
+        _poolBody.Children.Add(SubField("保留(元)", _reserveBox));
 
         var ok = new Button { Content = existing is null ? "建立" : "保存", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Accept();
@@ -162,6 +158,17 @@ internal sealed class PeriodCreateDialog : Window
     {
         var text = new TextBlock { Text = label, Width = 110, VerticalAlignment = VerticalAlignment.Center };
         var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
+        DockPanel.SetDock(text, Dock.Left);
+        d.Children.Add(text);
+        d.Children.Add(input);
+        return d;
+    }
+
+    /// <summary>分组下的子字段:名称 + 单控件,带左缩进,避免多控件堆一行溢出。</summary>
+    private static UIElement SubField(string label, UIElement input)
+    {
+        var text = new TextBlock { Text = label, Width = 110, VerticalAlignment = VerticalAlignment.Center };
+        var d = new DockPanel { Margin = new Thickness(24, 2, 0, 2) };
         DockPanel.SetDock(text, Dock.Left);
         d.Children.Add(text);
         d.Children.Add(input);
