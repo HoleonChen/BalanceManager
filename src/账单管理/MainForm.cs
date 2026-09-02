@@ -43,10 +43,14 @@ internal sealed class MainForm : Form
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add(MakeItem("退出(&X)", null, (_, _) => Close()));
 
+        var tools = new ToolStripMenuItem("工具(&T)");
+        tools.DropDownItems.Add(MakeItem("数据自检…", null, (_, _) => DbSelfTest.Run(this)));
+
         var help = new ToolStripMenuItem("帮助(&H)");
         help.DropDownItems.Add(MakeItem("关于(&A)", null, (_, _) => ShowAbout()));
 
         menu.Items.Add(file);
+        menu.Items.Add(tools);
         menu.Items.Add(help);
         MainMenuStrip = menu;
         Controls.Add(menu);
