@@ -56,6 +56,8 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = false;
         file.DropDownItems.Add(_closeLedgerItem);
         file.DropDownItems.Add(new ToolStripSeparator());
+        file.DropDownItems.Add(MakeItem("打开账本目录…", null, (_, _) => OpenDataDir()));
+        file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add(MakeItem("退出(&X)", null, (_, _) => Close()));
 
         var tools = new ToolStripMenuItem("工具(&T)");
@@ -379,6 +381,21 @@ internal sealed class MainForm : Form
     {
         using var dlg = new SettingsDialog(_settings);
         dlg.ShowDialog(this);
+    }
+
+    /// <summary>在资源管理器打开账本目录(默认文档\账单管理)。</summary>
+    private static void OpenDataDir()
+    {
+        AppPaths.EnsureDirs();
+        try
+        {
+            System.Diagnostics.Process.Start("explorer.exe", AppPaths.UserDataDir);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(null, $"打开目录失败:\n{ex.Message}",
+                "打开账本目录", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     /// <summary>账户管理窗口:列出/新建/停用账户。</summary>
