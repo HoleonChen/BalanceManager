@@ -114,28 +114,9 @@ CREATE TABLE IF NOT EXISTS calibration_log (
 );
 ";
 
-    // 预设分类:8 个支出大类 + 「差额调整」(挂其他下) + 5 个收入类。
-    // color 为固定调色板(图表/界面统一引用);收入类暂留 NULL 走自动分配。
-    private const string Seed = @"
-INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order) VALUES
-  (1,  NULL, '餐饮',   '#F06292', 0),
-  (2,  NULL, '交通',   '#42A5F5', 1),
-  (3,  NULL, '购物',   '#FFA726', 2),
-  (4,  NULL, '教育',   '#8E24AA', 3),
-  (5,  NULL, '娱乐',   '#29B6F6', 4),
-  (6,  NULL, '医疗',   '#66BB6A', 5),
-  (7,  NULL, '居住',   '#5C6BC0', 6),
-  (8,  NULL, '其他',   '#9E9E9E', 7),
-  (9,  8,    '差额调整','#B0BEC5', 0),
-  (10, NULL, '生活费',  NULL, 0),
-  (11, NULL, '家人转账', NULL, 1),
-  (12, NULL, '红包',    NULL, 2),
-  (13, NULL, '理财收益', NULL, 3),
-  (14, NULL, '其他',    NULL, 4);
-";
-
     /// <summary>
-    /// 建表/写账本名(仅新库 v0)。预设分类含收支类;账户表保持空,由用户/导入自行创建。
+    /// 建表/写账本名(仅新库 v0)。分类与账户都默认空,由用户在界面里自建
+    /// (设计改定:新账本从零开始;旧库已有的预设分类作为既有数据原样保留)。
     /// </summary>
     public static void Ensure(SqliteConnection conn, string ledgerName)
     {
@@ -144,7 +125,6 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order) VALUES
         if (version < 1)
         {
             ExecEach(conn, Ddl);
-            ExecEach(conn, Seed);           // 预设分类(收支)
             SetMeta(conn, "ledger.name", ledgerName);
             SetMeta(conn, "created_at", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
         }

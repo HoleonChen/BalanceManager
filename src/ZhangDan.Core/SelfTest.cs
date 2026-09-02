@@ -32,6 +32,7 @@ internal static class SelfTest
                     throw new Exception("账本名写入后读回不符。");
                 steps.Add("建库 + 写账本名/标记");
 
+                SeedCanonicalCategories(session);   // 新库分类默认空;自检需标准分类支撑断言
                 DataFlow(session, steps);
             }
 
@@ -68,6 +69,29 @@ internal static class SelfTest
             TryDelete(path);
             try { Directory.Delete(dir, recursive: true); } catch { /* 忽略 */ }
         }
+    }
+
+    /// <summary>为自检临时库种一套标准分类(旧设计里是建库预设;新库改为空,仅自检内部自建)。</summary>
+    private static void SeedCanonicalCategories(LedgerSession s)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) VALUES
+  (1,  NULL, '餐饮',   '#F06292', 0, 'expense'),
+  (2,  NULL, '交通',   '#42A5F5', 1, 'expense'),
+  (3,  NULL, '购物',   '#FFA726', 2, 'expense'),
+  (4,  NULL, '教育',   '#8E24AA', 3, 'expense'),
+  (5,  NULL, '娱乐',   '#29B6F6', 4, 'expense'),
+  (6,  NULL, '医疗',   '#66BB6A', 5, 'expense'),
+  (7,  NULL, '居住',   '#5C6BC0', 6, 'expense'),
+  (8,  NULL, '其他',   '#9E9E9E', 7, 'expense'),
+  (9,  8,    '差额调整','#B0BEC5', 0, 'expense'),
+  (10, NULL, '生活费',  NULL, 0, 'income'),
+  (11, NULL, '家人转账', NULL, 1, 'income'),
+  (12, NULL, '红包',    NULL, 2, 'income'),
+  (13, NULL, '理财收益', NULL, 3, 'income'),
+  (14, NULL, '其他',    NULL, 4, 'income');";
+        cmd.ExecuteNonQuery();
     }
 
     /// <summary>流水/周期/作废 数据流断言;任何不符即抛错。</summary>

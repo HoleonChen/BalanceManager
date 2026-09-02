@@ -44,20 +44,6 @@ internal sealed class FlowPage : PageBase
     public FlowPage() => Content = Placeholder.Build("流水", "周期/自定义范围流水与只读视图将在 P3 落地。");
 }
 
-internal sealed class PeriodsPage : PageBase
-{
-    public PeriodsPage() => Content = Placeholder.Build("周期", "新建/封存/解除封存/周期管理将在 P3 落地。");
-}
-
-internal sealed class AccountsPage : PageBase
-{
-    public AccountsPage() => Content = Placeholder.Build("账户", "净资产/派生余额/详情/校准将在 P3 落地。");
-}
-
-internal sealed class CategoriesPage : PageBase
-{
-    public CategoriesPage() => Content = Placeholder.Build("分类", "分类管理将在 P3 落地。");
-}
 
 internal sealed class SettingsPage : PageBase
 {
