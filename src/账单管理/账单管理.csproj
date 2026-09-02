@@ -22,9 +22,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- SQLCipher 加密 SQLite:Microsoft.Data.Sqlite.Core + 原生 e_sqlcipher 由 NuGet 按 RID 提供 -->
-    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.8" />
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.8" />
+    <!-- 业务/数据层已抽到 ZhangDan.Core(本工程为过渡期 UI 壳,仅保留 WinForms 界面) -->
+    <ProjectReference Include="..\ZhangDan.Core\ZhangDan.Core.csproj" />
   </ItemGroup>
 
 </Project>
