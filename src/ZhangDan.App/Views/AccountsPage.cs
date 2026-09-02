@@ -33,12 +33,24 @@ internal sealed class AccountsPage : PageBase
         var enable = new Button { Content = "启用所选", MinWidth = 92, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
         enable.Click += (_, _) => Toggle(true);
 
-        var top = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 16, 20, 10) };
-        top.Children.Add(create);
-        top.Children.Add(edit);
-        top.Children.Add(disable);
-        top.Children.Add(enable);
-        top.Children.Add(_summary);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(create);
+        buttons.Children.Add(edit);
+        buttons.Children.Add(disable);
+        buttons.Children.Add(enable);
+
+        _summary.HorizontalAlignment = HorizontalAlignment.Right;
+        _summary.VerticalAlignment = VerticalAlignment.Center;
+        var top = new Grid { Margin = new Thickness(20, 16, 20, 10) };
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var summaryHost = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+        summaryHost.Children.Add(_summary);
+        Grid.SetColumn(buttons, 0);
+        Grid.SetColumn(summaryHost, 2);
+        top.Children.Add(buttons);
+        top.Children.Add(summaryHost);
 
         var menu = new ContextMenu();
         var mEdit = new MenuItem { Header = "编辑账户…" }; mEdit.Click += (_, _) => EditSelected();
