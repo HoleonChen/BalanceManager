@@ -30,10 +30,16 @@ VALUES ($name, $start, $end, 'active');";
         cmd.CommandText = "SELECT last_insert_rowid();";
         var id = Convert.ToInt64(cmd.ExecuteScalar());
 
-        // 补归属:此前已记、落在本期范围内且仍属「未归属」的流水,一并归入本期
+        // 补归属:此前已记、落在本期范围内且仍属「未归属」的流水,一并归入本期。
+        // 但某日若已被封存周期覆盖,视为冻结历史:已归属的归其原期(非未归属,自然不动),
+        // 仍游离未归属的也不改挂(不能塞进新周期变相改写封存期)。
+        const string notSealed = @"
+  AND NOT EXISTS (SELECT 1 FROM periods x WHERE x.status = 'sealed'
+      AND x.start_date <= transactions.date
+      AND (x.end_date IS NULL OR x.end_date >= transactions.date))";
         cmd.CommandText = endDate is null
-            ? "UPDATE transactions SET period_id = $pid WHERE period_id IS NULL AND date >= $start;"
-            : "UPDATE transactions SET period_id = $pid WHERE period_id IS NULL AND date BETWEEN $start AND $end;";
+            ? "UPDATE transactions SET period_id = $pid WHERE period_id IS NULL AND date >= $start" + notSealed + ";"
+            : "UPDATE transactions SET period_id = $pid WHERE period_id IS NULL AND date BETWEEN $start AND $end" + notSealed + ";";
         cmd.Parameters.AddWithValue("$pid", id);
         cmd.ExecuteNonQuery();
 
@@ -85,4 +91,116 @@ LIMIT 1;";
             r.IsDBNull(3) ? null : r.GetString(3),
             r.GetString(4));
     }
+
+    /// <summary>按 id 取周期;不存在返回 null。</summary>
+    public static PeriodRow? Get(LedgerSession s, long id)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "SELECT id, name, start_date, end_date, status FROM periods WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read())
+            return null;
+        return new PeriodRow(r.GetInt64(0), r.GetString(1), r.GetString(2),
+            r.IsDBNull(3) ? null : r.GetString(3), r.GetString(4));
+    }
+
+    /// <summary>列出全部周期(含已封存),按开始日倒序(周期管理用)。</summary>
+    public static IReadOnlyList<PeriodRow> ListAll(LedgerSession s)
+    {
+        var list = new List<PeriodRow>();
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT id, name, start_date, end_date, status
+FROM periods
+ORDER BY start_date DESC, id DESC;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new PeriodRow(r.GetInt64(0), r.GetString(1), r.GetString(2),
+                r.IsDBNull(3) ? null : r.GetString(3), r.GetString(4)));
+        }
+        return list;
+    }
+
+    /// <summary>封存一个进行中周期(status → 'sealed',只读)。已封存则 no-op。</summary>
+    public static void Seal(LedgerSession s, long id)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE periods SET status = 'sealed' WHERE id = $id AND status = 'active';";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>解除封存(status → 'active',恢复可改)。仅封存态可解。</summary>
+    public static void Unseal(LedgerSession s, long id)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE periods SET status = 'active' WHERE id = $id AND status = 'sealed';";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>改结束日(未设结束日的周期封存前补一个收尾日等)。</summary>
+    public static void SetEndDate(LedgerSession s, long id, string endDate)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE periods SET end_date = $end WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$end", endDate);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>该日是否落在任一封存周期内(= 该日已冻结只读)。</summary>
+    public static bool HasSealedCovering(LedgerSession s, string date)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT COUNT(*) FROM periods
+WHERE status = 'sealed' AND start_date <= $date
+  AND (end_date IS NULL OR end_date >= $date);";
+        cmd.Parameters.AddWithValue("$date", date);
+        return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
+    }
+
+    /// <summary>该日落在封存周期内则抛 <see cref="LedgerReadonlyException"/>(写保护入口)。</summary>
+    public static void ThrowIfSealed(LedgerSession s, string date)
+    {
+        if (HasSealedCovering(s, date))
+            throw new LedgerReadonlyException(date);
+    }
+
+    /// <summary>进行中(未封存)且已结束的周期里,开始最晚的一个(供「到期推荐新建」提示)。</summary>
+    public static PeriodRow? GetLatestExpiredActive(LedgerSession s, string today)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT id, name, start_date, end_date, status
+FROM periods
+WHERE status = 'active' AND end_date IS NOT NULL AND end_date < $today
+ORDER BY start_date DESC, id DESC
+LIMIT 1;";
+        cmd.Parameters.AddWithValue("$today", today);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read())
+            return null;
+        return new PeriodRow(r.GetInt64(0), r.GetString(1), r.GetString(2),
+            r.IsDBNull(3) ? null : r.GetString(3), r.GetString(4));
+    }
+}
+
+/// <summary>某日已被封存周期覆盖,该日流水只读、不可增删改。</summary>
+internal sealed class LedgerReadonlyException : Exception
+{
+    public LedgerReadonlyException(string date)
+        : base(Friendly(date))
+    {
+        Date = date;
+    }
+
+    public string Date { get; }
+
+    /// <summary>统一文案:UI 预检与异常共用,避免两份措辞漂移。</summary>
+    public static string Friendly(string date)
+        => $"该日期({date})属于已封存周期,处于只读状态,不能新增/修改/作废流水。\n如需改动请先到「工具 → 周期管理」解除封存。";
 }

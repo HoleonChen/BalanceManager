@@ -19,6 +19,8 @@ internal sealed class MainForm : Form
     private ToolStripMenuItem _calibrateItem = null!;
     private ToolStripMenuItem _flowItem = null!;
     private ToolStripMenuItem _poolItem = null!;
+    private ToolStripMenuItem _sealItem = null!;
+    private ToolStripMenuItem _periodsItem = null!;
     private LedgerSession? _ledger;
 
     private Panel _home = null!;
@@ -78,6 +80,12 @@ internal sealed class MainForm : Form
         _poolItem = MakeItem("设置资金池…", null, (_, _) => OnPool());
         _poolItem.Enabled = false;
         tools.DropDownItems.Add(_poolItem);
+        _sealItem = MakeItem("封存当前周期…", null, (_, _) => OnSealCurrentPeriod());
+        _sealItem.Enabled = false;
+        tools.DropDownItems.Add(_sealItem);
+        _periodsItem = MakeItem("周期管理…", null, (_, _) => OnManagePeriods());
+        _periodsItem.Enabled = false;
+        tools.DropDownItems.Add(_periodsItem);
         tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add(MakeItem("数据自检…", null, (_, _) => DbSelfTest.Run(this)));
 
@@ -167,10 +175,10 @@ internal sealed class MainForm : Form
         {
             AutoSize = true,
             ForeColor = Color.SteelBlue,
-            Margin = new Padding(6, 8, 0, 0),
+            Margin = new Padding(6, 10, 0, 0),
             Cursor = Cursors.Hand
         };
-        _periodChip.Click += (_, _) => OnViewFlow();
+        _periodChip.Click += (_, _) => OnPeriodChipClick();
 
         _summaryLabel = new Label
         {
@@ -323,6 +331,8 @@ internal sealed class MainForm : Form
         _calibrateItem.Enabled = false;
         _flowItem.Enabled = false;
         _poolItem.Enabled = false;
+        _sealItem.Enabled = false;
+        _periodsItem.Enabled = false;
         Text = "账单管理";
         _statusLabel.Text = "尚未打开账本";
         HideHome();
@@ -338,6 +348,8 @@ internal sealed class MainForm : Form
         _calibrateItem.Enabled = true;
         _flowItem.Enabled = true;
         _poolItem.Enabled = true;
+        _sealItem.Enabled = true;
+        _periodsItem.Enabled = true;
         Text = $"{session.Name} —— 账单管理";
         _statusLabel.Text = $"已打开:{session.Path}";
         ShowHome();
@@ -527,7 +539,7 @@ internal sealed class MainForm : Form
             $"· 池:剩余 {Money.Yuan(st.RemainingCents)} / 可支配 {Money.Yuan(st.DisposableCents)}";
     }
 
-    /// <summary>顶栏周期 chip:覆盖今天的进行中周期;没有则置灰提示。</summary>
+    /// <summary>顶栏周期 chip:覆盖今天的进行中周期;无覆盖但已有到期未封存 → 橙色提示;都无 → 灰色提示。</summary>
     private void RefreshPeriodChip()
     {
         if (_ledger is null)
@@ -538,9 +550,68 @@ internal sealed class MainForm : Form
 
         var today = DateTime.Today.ToString("yyyy-MM-dd");
         var p = Periods.GetCoveringActive(_ledger, today);
-        _periodChip.Text = p is null
-            ? "· 无进行中周期"
-            : $"· 周期:{p.Name}({ShortDate(p.StartDate)}~{(p.EndDate is null ? "长期" : ShortDate(p.EndDate))})";
+        if (p is not null)
+        {
+            _periodChip.ForeColor = Color.SteelBlue;
+            _periodChip.Text =
+                $"· 周期:{p.Name}({ShortDate(p.StartDate)}~{(p.EndDate is null ? "长期" : ShortDate(p.EndDate))})";
+            return;
+        }
+
+        var expired = Periods.GetLatestExpiredActive(_ledger, today);
+        if (expired is not null)
+        {
+            _periodChip.ForeColor = Color.DarkOrange;
+            _periodChip.Text = $"· 上一周期「{expired.Name}」已到期未封存(点此封存/新建)";
+            return;
+        }
+
+        _periodChip.ForeColor = SystemColors.GrayText;
+        _periodChip.Text = "· 无进行中周期(点击新建)";
+    }
+
+    /// <summary>点周期 chip:覆盖今天的周期 → 看本期流水;否则进周期管理(封存/新建)。</summary>
+    private void OnPeriodChipClick()
+    {
+        if (_ledger is null)
+            return;
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        if (Periods.GetCoveringActive(_ledger, today) is not null)
+        {
+            OnViewFlow();
+            return;
+        }
+        OnManagePeriods();
+    }
+
+    /// <summary>封存当前周期(覆盖今天的进行中周期;无则提示)。</summary>
+    private void OnSealCurrentPeriod()
+    {
+        if (_ledger is null)
+            return;
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var p = Periods.GetCoveringActive(_ledger, today);
+        if (p is null)
+        {
+            MessageBox.Show(this,
+                "当前没有覆盖今天的进行中周期可封存。\n请到「工具 → 周期管理」查看并处理(含已到期未封存的周期)。",
+                "账单管理", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        PeriodManageDialog.SealFlow(this, _ledger, p);
+        RefreshPeriodChip();
+        RefreshView();
+    }
+
+    /// <summary>周期管理:列出全部周期,可封存/解除封存/看流水/新建。</summary>
+    private void OnManagePeriods()
+    {
+        if (_ledger is null)
+            return;
+        using var dlg = new PeriodManageDialog(_ledger);
+        dlg.ShowDialog(this);
+        RefreshPeriodChip();
+        RefreshView();
     }
 
     private static string ShortDate(string iso)
@@ -694,6 +765,8 @@ internal sealed class MainForm : Form
             return;
         if (_todayList.SelectedItems[0].Tag is not TxnListItem t)
             return;
+        if (NotifySealedDate(t.Date))
+            return;
 
         string head = t.Direction == "transfer"
             ? $"作废这笔转账?\n\n  {t.Name} · {t.Account} → {t.AccountTo}\n  {Money.Yuan(t.AmountCents)}"
@@ -707,12 +780,26 @@ internal sealed class MainForm : Form
         RefreshView();
     }
 
+    /// <summary>该日已被封存周期覆盖时提示并返回 true(调用方据此中止写操作,避免异常后置弹出)。</summary>
+    private bool NotifySealedDate(string date)
+    {
+        if (_ledger is not null && Periods.HasSealedCovering(_ledger, date))
+        {
+            MessageBox.Show(this, LedgerReadonlyException.Friendly(date), "账单管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>双击列表行:就地编辑该笔支出/收入;转账走 EditTransfer。</summary>
     private void EditSelected()
     {
         if (_ledger is null || _todayList.SelectedItems.Count == 0)
             return;
         if (_todayList.SelectedItems[0].Tag is not TxnListItem t)
+            return;
+        if (NotifySealedDate(t.Date))
             return;
 
         if (t.Direction == "transfer")

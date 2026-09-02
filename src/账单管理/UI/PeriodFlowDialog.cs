@@ -15,6 +15,7 @@ internal sealed class PeriodFlowDialog : Form
     private readonly string _periodName;
     private readonly string _start;
     private readonly string _end;
+    private readonly bool _readOnly;
     private readonly Label _summary = new() { AutoSize = true, ForeColor = SystemColors.GrayText };
 
     private readonly ListView _list = new()
@@ -26,14 +27,18 @@ internal sealed class PeriodFlowDialog : Form
         HideSelection = false
     };
 
-    public PeriodFlowDialog(LedgerSession ledger, string periodName, string start, string end)
+    public PeriodFlowDialog(LedgerSession ledger, string periodName, string start, string end,
+        bool readOnly = false)
     {
         _ledger = ledger;
         _periodName = periodName;
         _start = start;
         _end = end;
+        _readOnly = readOnly;
 
         Text = $"周期流水 · {periodName}";
+        if (readOnly)
+            Text += "(已封存·只读)";
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(820, 560);
         MinimumSize = new Size(620, 380);
@@ -45,9 +50,10 @@ internal sealed class PeriodFlowDialog : Form
         _list.Columns.Add("账户", 190);
         _list.Columns.Add("金额", 130, HorizontalAlignment.Right);
 
-        // 右键/Delete 作废
+        // 右键/Delete 作废;封存周期整窗只读,不提供作废入口
         var ctx = new ContextMenuStrip();
         var cancel = new ToolStripMenuItem("作废/删除这笔…");
+        cancel.Enabled = !_readOnly;
         cancel.Click += (_, _) => CancelSelected();
         ctx.Items.Add(cancel);
         _list.ContextMenuStrip = ctx;
@@ -138,6 +144,12 @@ internal sealed class PeriodFlowDialog : Form
     {
         if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not TxnListItem t)
             return;
+        if (Periods.HasSealedCovering(_ledger, t.Date))
+        {
+            MessageBox.Show(this, LedgerReadonlyException.Friendly(t.Date), _readOnly ? "已封存周期(只读)" : "账单管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
 
         var head = t.Direction == "transfer"
             ? $"作废这笔转账?\n\n  {t.Name} · {t.Account} → {t.AccountTo}\n  {Money.Yuan(t.AmountCents)}"

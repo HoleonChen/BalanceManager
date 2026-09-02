@@ -78,6 +78,7 @@ internal static class Transactions
     /// <summary>插入一笔支出/收入,按日期自动归属进行中周期,返回自增 id。</summary>
     public static long Add(LedgerSession s, TxnDraft t)
     {
+        Periods.ThrowIfSealed(s, t.Date);   // 封存周期内的日期只读
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO transactions
@@ -108,6 +109,7 @@ VALUES
     /// <summary>插入一笔转账(direction='transfer');转出 −本金,转入 +(本金+浮动)。</summary>
     public static long Transfer(LedgerSession s, TransferDraft t)
     {
+        Periods.ThrowIfSealed(s, t.Date);   // 封存周期内的日期只读
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO transactions
@@ -138,6 +140,10 @@ VALUES
     /// <summary>作废一笔(软删:置 status='cancelled',流水与合计均不再计入,记录仍留库备查)。</summary>
     public static void Cancel(LedgerSession s, long id)
     {
+        var date = RowDate(s, id);
+        if (date is null)
+            return;                       // 记录不存在/已删,无事可做
+        Periods.ThrowIfSealed(s, date);   // 封存周期内的流水只读
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = "UPDATE transactions SET status = 'cancelled' WHERE id = $id AND status <> 'cancelled';";
         cmd.Parameters.AddWithValue("$id", id);
@@ -171,6 +177,10 @@ WHERE id = $id AND direction = 'transfer' AND status <> 'cancelled';";
     /// <summary>就地修改一笔转账(改转出/转入/本金/Δ/类别/备注/入池;日期与周期归属不变)。</summary>
     public static void UpdateTransfer(LedgerSession s, TransferEditable t)
     {
+        var date = RowDate(s, t.Id);
+        if (date is null)
+            return;
+        Periods.ThrowIfSealed(s, date);   // 封存周期内的流水只读
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 UPDATE transactions
@@ -217,6 +227,10 @@ WHERE id = $id AND direction <> 'transfer' AND status <> 'cancelled';";
     /// <summary>就地修改一笔支出/收入(改方向/账户/分类/金额/名称/渠道/备注/入池;日期与周期归属保持不变)。</summary>
     public static void Update(LedgerSession s, TxnEditable t)
     {
+        var date = RowDate(s, t.Id);
+        if (date is null)
+            return;
+        Periods.ThrowIfSealed(s, date);   // 封存周期内的流水只读
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 UPDATE transactions
@@ -345,5 +359,14 @@ WHERE date = $date AND direction <> 'transfer' AND status <> 'cancelled';";
         using var r = cmd.ExecuteReader();
         r.Read();
         return (r.GetInt64(0), r.GetInt64(1));
+    }
+
+    /// <summary>取一笔的日期(写保护/回填用);不存在返回 null。</summary>
+    private static string? RowDate(LedgerSession s, long id)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "SELECT date FROM transactions WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        return cmd.ExecuteScalar() as string;
     }
 }

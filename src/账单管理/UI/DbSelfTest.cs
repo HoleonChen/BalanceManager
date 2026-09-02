@@ -232,6 +232,9 @@ internal static class DbSelfTest
 
         // 校准余额:账面 = 基准 + 基准日后净变动;三种处理 + 审计历史
         CalibrationFlow(s, accountA, date, steps);
+
+        // 周期生命周期:封存 → 只读(增/改/作废拦截)→ 解除恢复;到期推荐;新周期不改挂封存期游离账
+        PeriodLifecycleFlow(s, steps);
     }
 
     /// <summary>校准余额断言:账面派生 / 记调整流水 / 仅改基准 / 补记明细(仅审计) / 审计历史。</summary>
@@ -382,6 +385,130 @@ WHERE account_id = $a AND name = '差额调整' AND direction = 'out'
         if (Pools.State(s, p2).RemainingCents != 64500)
             throw new Exception("改预算后剩余派生不符。");
         steps.Add("资金池:同周期二次保存仍是单池(upsert)");
+    }
+
+    /// <summary>
+    /// 周期生命周期断言:封存 → 该期日期只读(增/改/作废全部拦截)→ 解除恢复可写;
+    /// 读(流水/合计)不受封存影响;到期未封存周期能被「推荐新建」查到,封存后不再推荐;
+    /// 新周期补归属不得改挂封存期内的游离(未归属)账。
+    /// 场景日期选在主周期(+30 天)之外的未来窗口与远古窗口,避免扰动其余断言。
+    /// </summary>
+    private static void PeriodLifecycleFlow(LedgerSession s, List<string> steps)
+    {
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var a = Accounts.Insert(s, "封测A", "bank", "银行", 0);
+        var b = Accounts.Insert(s, "封测B", "wallet", "微信", 0);
+
+        // ① 未来窗口建周期并记账 → 自动归属
+        var d0 = DateTime.Today.AddDays(41).ToString("yyyy-MM-dd");
+        var d1 = DateTime.Today.AddDays(43).ToString("yyyy-MM-dd");
+        var d2 = DateTime.Today.AddDays(45).ToString("yyyy-MM-dd");
+        var pId = Periods.Insert(s, "封测期", d0, d2);
+        var outId = Transactions.Add(s, new TxnDraft
+        {
+            Date = d1, Direction = "out", AccountId = a,
+            CategoryId = 8, AmountCents = 4000, Name = "封存前支出", Note = "", Channel = "", InPool = false
+        });
+        var trId = Transactions.Transfer(s, new TransferDraft
+        {
+            Date = d1, FromAccountId = a, ToAccountId = b,
+            PrincipalCents = 2000, DeltaCents = 0, Kind = "互转", Note = "", InPool = false
+        });
+        if (Periods.Get(s, pId)!.Status != "active"
+            || GetPeriodId(s, outId) != pId || GetPeriodId(s, trId) != pId)
+            throw new Exception("封存前周期归属不符。");
+        steps.Add("生命周期:未来窗口建期 → 期记账自动归属");
+
+        // ② 封存 → 期内日期只读
+        Periods.Seal(s, pId);
+        if (Periods.Get(s, pId)!.Status != "sealed"
+            || !Periods.HasSealedCovering(s, d1) || !Periods.HasSealedCovering(s, d0)
+            || Periods.HasSealedCovering(s, today))
+            throw new Exception("封存后状态/覆盖判定不符。");
+
+        ExpectReadonly(() => Transactions.Add(s, new TxnDraft
+        {
+            Date = d1, Direction = "out", AccountId = a,
+            CategoryId = 8, AmountCents = 100, Name = "应被拦", Note = "", Channel = "", InPool = false
+        }));
+        ExpectReadonly(() => Transactions.Transfer(s, new TransferDraft
+        {
+            Date = d1, FromAccountId = a, ToAccountId = b,
+            PrincipalCents = 100, DeltaCents = 0, Kind = "互转", Note = "", InPool = false
+        }));
+        ExpectReadonly(() => Transactions.Cancel(s, outId));
+        ExpectReadonly(() => Transactions.Update(s,
+            (Transactions.GetEditable(s, outId) ?? throw new Exception("读不到封存前支出。"))
+            with { AmountCents = 1 }));
+        ExpectReadonly(() => Transactions.UpdateTransfer(s,
+            (Transactions.GetTransfer(s, trId) ?? throw new Exception("读不到封存前转账。"))
+            with { PrincipalCents = 1 }));
+        if (Transactions.ListByDate(s, d1).Count != 2
+            || Transactions.RangeTotals(s, d0, d2).OutCents != 4000)
+            throw new Exception("封存后流水/合计读不出来(应照常可见、只是只读)。");
+        steps.Add("生命周期:封存 → 期内只读(增/改/作废拦截),读照常");
+
+        // ③ 解除封存 → 恢复可写
+        Periods.Unseal(s, pId);
+        if (Periods.Get(s, pId)!.Status != "active")
+            throw new Exception("解除封存后状态未回 active。");
+        var okId = Transactions.Add(s, new TxnDraft
+        {
+            Date = d1, Direction = "out", AccountId = a,
+            CategoryId = 8, AmountCents = 500, Name = "解封后", Note = "", Channel = "", InPool = false
+        });
+        Transactions.Cancel(s, okId);   // 能写能作废 = 已恢复
+        steps.Add("生命周期:解除封存 → 恢复可写(记/作废均可)");
+
+        // ④ 新周期不得把封存期游离账改挂(补归属的 notSealed 守卫)
+        Periods.Seal(s, pId);   // 再封存,模拟已冻结窗口
+        var legacy = InsertLegacyUnassigned(s, d1, a);
+        var qId = Periods.Insert(s, "重叠新期", d0, d2);
+        if (Periods.Get(s, qId) is null || GetPeriodId(s, legacy) is not null)
+            throw new Exception("新周期补归属把封存期游离账改挂了(应保持未归属)。");
+        steps.Add("生命周期:新周期不改挂封存期游离账");
+
+        // ⑤ 到期推荐:已到期未封存周期可被查出,封存后不再推荐
+        var oldStart = DateTime.Today.AddDays(-40).ToString("yyyy-MM-dd");
+        var oldEnd = DateTime.Today.AddDays(-36).ToString("yyyy-MM-dd");
+        var oldId = Periods.Insert(s, "旧到期期", oldStart, oldEnd);
+        var latest = Periods.GetLatestExpiredActive(s, today);
+        if (latest is null || latest.Id != oldId)
+            throw new Exception("到期未封存周期未被「推荐新建」查到。");
+        Periods.Seal(s, oldId);
+        if (Periods.GetLatestExpiredActive(s, today) is not null)
+            throw new Exception("封存后仍被推荐新建(应已归档)。");
+        steps.Add("生命周期:到期未封存 → 推荐新建;封存后不再推荐");
+    }
+
+    /// <summary>写操作应被只读保护拦截(LedgerReadonlyException);未拦截即断言失败。</summary>
+    private static void ExpectReadonly(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (LedgerReadonlyException)
+        {
+            return;
+        }
+        throw new Exception("封存期内写入未被拦截(应抛 LedgerReadonlyException)。");
+    }
+
+    /// <summary>直插一笔封存期内的游离(未归属)账,模拟历史遗留/导入产生的 period_id=NULL 行。</summary>
+    private static long InsertLegacyUnassigned(LedgerSession s, string date, long accountId)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO transactions (period_id, date, account_id, category_id, channel, name, note,
+                          amount_cents, direction, source, status, in_pool, created_at)
+VALUES (NULL, $date, $acct, 8, '', '遗留游离账', '', 1200, 'out', 'legacy', 'normal', 0, $created);";
+        cmd.Parameters.AddWithValue("$date", date);
+        cmd.Parameters.AddWithValue("$acct", accountId);
+        cmd.Parameters.AddWithValue("$created", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+        cmd.ExecuteNonQuery();
+        cmd.CommandText = "SELECT last_insert_rowid();";
+        return Convert.ToInt64(cmd.ExecuteScalar());
     }
 
     private static long? GetPeriodId(LedgerSession s, long txId)
