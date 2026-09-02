@@ -39,10 +39,13 @@ internal static class Transactions
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO transactions
-  (date, account_id, category_id, channel, name, note, amount_cents, direction,
-   source, status, in_pool, created_at)
+  (period_id, date, account_id, category_id, channel, name, note, amount_cents,
+   direction, source, status, in_pool, created_at)
 VALUES
-  ($date, $acct, $cat, $channel, $name, $note, $amount, $direction,
+  ((SELECT id FROM periods WHERE status = 'active'
+     AND start_date <= $date AND (end_date IS NULL OR end_date >= $date)
+     ORDER BY start_date DESC, id DESC LIMIT 1),
+   $date, $acct, $cat, $channel, $name, $note, $amount, $direction,
    'manual', 'normal', $pool, $created);";
         cmd.Parameters.AddWithValue("$date", t.Date);
         cmd.Parameters.AddWithValue("$acct", t.AccountId);

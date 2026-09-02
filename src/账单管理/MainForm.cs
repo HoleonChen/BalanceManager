@@ -14,12 +14,14 @@ internal sealed class MainForm : Form
     private readonly AppSettings _settings;
     private readonly ToolStripStatusLabel _statusLabel = new();
     private ToolStripMenuItem _closeLedgerItem = null!;
+    private ToolStripMenuItem _newPeriodItem = null!;
     private LedgerSession? _ledger;
 
     private Panel _home = null!;
     private Label _hintLabel = null!;
     private Label _summaryLabel = null!;
     private Label _dateLabel = null!;
+    private Label _periodChip = null!;
     private ListView _todayList = null!;
     private DateTime _viewDate;
 
@@ -45,6 +47,9 @@ internal sealed class MainForm : Form
         var file = new ToolStripMenuItem("文件(&F)");
         file.DropDownItems.Add(MakeItem("新建账本(&N)…", Keys.Control | Keys.N, OnNewLedger));
         file.DropDownItems.Add(MakeItem("打开账本(&O)…", Keys.Control | Keys.O, OnOpenLedger));
+        _newPeriodItem = MakeItem("新建记账周期…", null, (_, _) => OnNewPeriod());
+        _newPeriodItem.Enabled = false;
+        file.DropDownItems.Add(_newPeriodItem);
         _closeLedgerItem = MakeItem("关闭账本", null, (_, _) => CloseLedger());
         _closeLedgerItem.Enabled = false;
         file.DropDownItems.Add(_closeLedgerItem);
@@ -126,14 +131,21 @@ internal sealed class MainForm : Form
         var today = new Button { Text = "今天", Width = 56, Height = 30, Margin = new Padding(8, 0, 18, 0) };
         today.Click += (_, _) => { _viewDate = DateTime.Today; RefreshView(); };
 
+        _periodChip = new Label
+        {
+            AutoSize = true,
+            ForeColor = Color.SteelBlue,
+            Margin = new Padding(6, 8, 0, 0)
+        };
+
         _summaryLabel = new Label
         {
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
-            Margin = new Padding(0, 8, 0, 0)
+            Margin = new Padding(12, 8, 0, 0)
         };
 
-        top.Controls.AddRange(new Control[] { record, prev, _dateLabel, next, today, _summaryLabel });
+        top.Controls.AddRange(new Control[] { record, prev, _dateLabel, next, today, _periodChip, _summaryLabel });
 
         _todayList = new ListView
         {
@@ -254,6 +266,7 @@ internal sealed class MainForm : Form
         _ledger?.Dispose();
         _ledger = null;
         _closeLedgerItem.Enabled = false;
+        _newPeriodItem.Enabled = false;
         Text = "账单管理";
         _statusLabel.Text = "尚未打开账本";
         HideHome();
@@ -264,6 +277,7 @@ internal sealed class MainForm : Form
         _ledger?.Dispose();
         _ledger = session;
         _closeLedgerItem.Enabled = true;
+        _newPeriodItem.Enabled = true;
         Text = $"{session.Name} —— 账单管理";
         _statusLabel.Text = $"已打开:{session.Path}";
         ShowHome();
@@ -275,6 +289,50 @@ internal sealed class MainForm : Form
         _home.Visible = true;
         _hintLabel.Visible = false;
         RefreshView();
+        RefreshPeriodChip();
+    }
+
+    /// <summary>新建记账周期;此后记的流水按日期自动归属(见 Transactions.Add)。</summary>
+    private void OnNewPeriod()
+    {
+        if (_ledger is null)
+            return;
+        using var dlg = new PeriodDialog();
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            Periods.Insert(_ledger, dlg.PeriodName, dlg.StartDate, dlg.EndDate);
+            RefreshPeriodChip();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"建立周期失败:\n{ex.Message}", "账单管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>顶栏周期 chip:覆盖今天的进行中周期;没有则置灰提示。</summary>
+    private void RefreshPeriodChip()
+    {
+        if (_ledger is null)
+        {
+            _periodChip.Text = string.Empty;
+            return;
+        }
+
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var p = Periods.GetCoveringActive(_ledger, today);
+        _periodChip.Text = p is null
+            ? "· 无进行中周期"
+            : $"· 周期:{p.Name}({ShortDate(p.StartDate)}~{(p.EndDate is null ? "长期" : ShortDate(p.EndDate))})";
+    }
+
+    private static string ShortDate(string iso)
+    {
+        var p = iso.Split('-');
+        return $"{int.Parse(p[1])}月{int.Parse(p[2])}日";
     }
 
     private void HideHome()
