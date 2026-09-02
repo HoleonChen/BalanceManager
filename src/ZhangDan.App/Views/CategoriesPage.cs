@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 
 namespace ZhangDan.App.Views;
@@ -29,6 +30,8 @@ internal sealed class CategoriesPage : PageBase
 
         var create = new Button { Content = "＋ 新建分类…", MinWidth = 128, Height = 34 };
         create.Click += (_, _) => Create();
+        var edit = new Button { Content = "编辑…", MinWidth = 76, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
+        edit.Click += (_, _) => EditSelected();
         var del = new Button { Content = "删除所选", MinWidth = 92, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
         del.Click += (_, _) => Delete();
 
@@ -36,7 +39,21 @@ internal sealed class CategoriesPage : PageBase
         top.Children.Add(_outRadio);
         top.Children.Add(_inRadio);
         top.Children.Add(create);
+        top.Children.Add(edit);
         top.Children.Add(del);
+
+        var menu = new ContextMenu();
+        var mEdit = new MenuItem { Header = "编辑…" }; mEdit.Click += (_, _) => EditSelected();
+        var mUp = new MenuItem { Header = "上移" }; mUp.Click += (_, _) => MoveSelected(true);
+        var mDown = new MenuItem { Header = "下移" }; mDown.Click += (_, _) => MoveSelected(false);
+        var mDel = new MenuItem { Header = "删除" }; mDel.Click += (_, _) => Delete();
+        menu.Items.Add(mEdit);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(mUp);
+        menu.Items.Add(mDown);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(mDel);
+        _list.ContextMenu = menu;
 
         var gv = new GridView();
         gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 180, DisplayMemberBinding = Bind("Name") });
@@ -80,7 +97,7 @@ internal sealed class CategoriesPage : PageBase
 
     private void Create()
     {
-        var dlg = new CategoryCreateDialog(Income) { Owner = Window.GetWindow(this) };
+        var dlg = new CategoryCreateDialog(income: Income) { Owner = Window.GetWindow(this) };
         if (dlg.ShowDialog() != true)
             return;
         try
@@ -92,6 +109,39 @@ internal sealed class CategoriesPage : PageBase
         {
             MessageBox.Show($"新建分类失败:\n{ex.Message}", "分类", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void EditSelected()
+    {
+        var r = Selected();
+        if (r is null)
+            return;
+        var dlg = new CategoryCreateDialog(income: Income, name: r.C.Name, keyword: r.Keyword, color: r.C.Color)
+        {
+            Owner = Window.GetWindow(this)
+        };
+        if (dlg.ShowDialog() != true)
+            return;
+        try
+        {
+            Categories.Rename(S, r.C.Id, dlg.CategoryName);
+            Categories.SetKeyword(S, r.C.Id, dlg.Keyword);
+            Categories.SetColor(S, r.C.Id, dlg.Color);
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"保存失败:\n{ex.Message}", "分类", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void MoveSelected(bool up)
+    {
+        var r = Selected();
+        if (r is null)
+            return;
+        Categories.Move(S, r.C.Id, up);
+        Reload();
     }
 
     private void Delete()
@@ -121,34 +171,76 @@ internal sealed class CategoriesPage : PageBase
     }
 }
 
-/// <summary>新建分类小窗(名称/关键词/可选颜色)。</summary>
+/// <summary>新建/编辑分类小窗(名称/关键词/颜色)。颜色=预设鲜艳色组(点选)+ 预览;淡色由系统自动派生。</summary>
 internal sealed class CategoryCreateDialog : Window
 {
     private static readonly string[] Palette =
     {
-        "#F06292", "#42A5F5", "#FFA726", "#8E24AA", "#29B6F6", "#66BB6A",
-        "#5C6BC0", "#9E9E9E", "#EC407A", "#26A69A", "#EF6C00", "#7E57C2"
+        "#F06292", "#EC407A", "#D81B60", "#42A5F5", "#29B6F6", "#26C6DA",
+        "#26A69A", "#66BB6A", "#9CCC65", "#FFA726", "#EF6C00", "#FFB300",
+        "#8E24AA", "#7E57C2", "#5C6BC0", "#8D6E63", "#9E9E9E", "#26A69A"
     };
 
     private readonly TextBox _name = new() { Width = 300 };
     private readonly TextBox _keyword = new() { Width = 300 };
-    private readonly TextBox _color = new() { Width = 120 };
+    private readonly TextBox _color = new() { Width = 110 };
+    private readonly Border _preview = new()
+    {
+        Width = 60,
+        Height = 22,
+        BorderBrush = Brushes.Gray,
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(3),
+        VerticalAlignment = VerticalAlignment.Center
+    };
     private readonly TextBlock _error = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
 
     public string CategoryName => _name.Text.Trim();
     public string Keyword => _keyword.Text.Trim();
     public string? Color => _color.Text.Trim().Length == 0 ? null : _color.Text.Trim();
 
-    public CategoryCreateDialog(bool income)
+    public CategoryCreateDialog(bool income, string? name = null, string? keyword = null, string? color = null)
     {
-        Title = income ? "新建收入分类" : "新建支出分类";
-        Width = 500;
+        Title = income ? (name is null ? "新建收入分类" : "编辑收入分类") : (name is null ? "新建支出分类" : "编辑支出分类");
+        Width = 540;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
-        _color.Text = Palette[0];
 
-        var ok = new Button { Content = "创建", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        _name.Text = name ?? "";
+        _keyword.Text = keyword ?? "";
+        _color.Text = color ?? Palette[0];
+        _color.TextChanged += (_, _) => RefreshPreview();
+        RefreshPreview();
+
+        // 预设色块:点选即设色
+        var swatches = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var hex in Palette)
+        {
+            var b = new Button
+            {
+                Content = "",
+                Width = 24,
+                Height = 24,
+                Margin = new Thickness(0, 0, 6, 6),
+                Background = Parse(hex),
+                BorderBrush = Brushes.Transparent,
+                ToolTip = hex
+            };
+            b.Click += (_, _) => { _color.Text = hex; };
+            swatches.Children.Add(b);
+        }
+
+        var colorRow = new StackPanel();
+        colorRow.Children.Add(swatches);
+        var editRow = new DockPanel { Margin = new Thickness(0, 2, 0, 0) };
+        DockPanel.SetDock(_preview, Dock.Right);
+        DockPanel.SetDock(_color, Dock.Left);
+        editRow.Children.Add(_color);
+        editRow.Children.Add(_preview);
+        colorRow.Children.Add(editRow);
+
+        var ok = new Button { Content = name is null ? "创建" : "保存", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Accept();
         var cancel = new Button { Content = "取消", Width = 96, Height = 34, IsCancel = true };
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
@@ -158,10 +250,33 @@ internal sealed class CategoryCreateDialog : Window
         var panel = new StackPanel { Margin = new Thickness(20) };
         panel.Children.Add(Field("名称", _name));
         panel.Children.Add(Field("关键词(可空)", _keyword));
-        panel.Children.Add(Field("颜色(#RRGGBB)", _color));
+        panel.Children.Add(new TextBlock { Text = "颜色(预设点选 / 可手填 #RRGGBB)", Margin = new Thickness(0, 4, 0, 2) });
+        panel.Children.Add(colorRow);
         panel.Children.Add(_error);
         panel.Children.Add(row);
         Content = panel;
+    }
+
+    private void RefreshPreview()
+    {
+        _preview.Background = Parse(_color.Text.Trim());
+    }
+
+    private static Brush? Parse(string hex)
+    {
+        try
+        {
+            return hex.Length == 7 && hex[0] == '#'
+                ? new SolidColorBrush(System.Windows.Media.Color.FromRgb(
+                    Convert.ToByte(hex.Substring(1, 2), 16),
+                    Convert.ToByte(hex.Substring(3, 2), 16),
+                    Convert.ToByte(hex.Substring(5, 2), 16)))
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static UIElement Field(string label, UIElement input)
@@ -184,7 +299,7 @@ internal sealed class CategoryCreateDialog : Window
         var c = Color;
         if (c is not null && (c.Length != 7 || c[0] != '#'))
         {
-            _error.Text = "颜色请填 #RRGGBB 格式,或留空。";
+            _error.Text = "颜色请填 #RRGGBB 格式,或留空(留空则以后自动配色)。";
             return;
         }
         DialogResult = true;
