@@ -337,6 +337,21 @@ internal sealed class MainForm : Form
         if (dlg.ShowDialog(this) != DialogResult.OK)
             return;
 
+        // 与进行中周期日期重叠时提醒(可并存,但同日流水只归属开始最晚者)
+        foreach (var p in Periods.ListActive(_ledger))
+        {
+            if (PeriodOverlaps(p, dlg.StartDate, dlg.EndDate))
+            {
+                var rng = $"{p.StartDate}~{(p.EndDate is null ? "长期" : p.EndDate)}";
+                if (MessageBox.Show(this,
+                        $"进行中周期「{p.Name}」({rng})与新周期日期重叠。\n\n重叠期间同一天的流水只自动归属到开始较晚的周期。确定继续建立?",
+                        "日期重叠提醒", MessageBoxButtons.OKCancel,
+                        MessageBoxIcon.Warning) != DialogResult.OK)
+                    return;
+                break;
+            }
+        }
+
         try
         {
             Periods.Insert(_ledger, dlg.PeriodName, dlg.StartDate, dlg.EndDate);
@@ -347,6 +362,16 @@ internal sealed class MainForm : Form
             MessageBox.Show(this, $"建立周期失败:\n{ex.Message}", "账单管理",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>两个区间(任一 end 为 null = 长期)是否重叠。</summary>
+    private static bool PeriodOverlaps(PeriodRow p, string start, string? end)
+    {
+        var s = DateTime.Parse(p.StartDate);
+        var e = p.EndDate is null ? DateTime.MaxValue : DateTime.Parse(p.EndDate);
+        var ns = DateTime.Parse(start);
+        var ne = end is null ? DateTime.MaxValue : DateTime.Parse(end);
+        return s <= ne && e >= ns;
     }
 
     /// <summary>设置窗口:凌晨宽限等全局偏好。</summary>
