@@ -15,6 +15,7 @@ internal sealed class MainForm : Form
     private readonly ToolStripStatusLabel _statusLabel = new();
     private ToolStripMenuItem _closeLedgerItem = null!;
     private ToolStripMenuItem _newPeriodItem = null!;
+    private ToolStripMenuItem _accountsItem = null!;
     private LedgerSession? _ledger;
 
     private Panel _home = null!;
@@ -57,6 +58,10 @@ internal sealed class MainForm : Form
         file.DropDownItems.Add(MakeItem("退出(&X)", null, (_, _) => Close()));
 
         var tools = new ToolStripMenuItem("工具(&T)");
+        _accountsItem = MakeItem("账户管理…", null, (_, _) => OnManageAccounts());
+        _accountsItem.Enabled = false;
+        tools.DropDownItems.Add(_accountsItem);
+        tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add(MakeItem("数据自检…", null, (_, _) => DbSelfTest.Run(this)));
 
         var help = new ToolStripMenuItem("帮助(&H)");
@@ -277,6 +282,7 @@ internal sealed class MainForm : Form
         _ledger = null;
         _closeLedgerItem.Enabled = false;
         _newPeriodItem.Enabled = false;
+        _accountsItem.Enabled = false;
         Text = "账单管理";
         _statusLabel.Text = "尚未打开账本";
         HideHome();
@@ -288,6 +294,7 @@ internal sealed class MainForm : Form
         _ledger = session;
         _closeLedgerItem.Enabled = true;
         _newPeriodItem.Enabled = true;
+        _accountsItem.Enabled = true;
         Text = $"{session.Name} —— 账单管理";
         _statusLabel.Text = $"已打开:{session.Path}";
         ShowHome();
@@ -321,6 +328,15 @@ internal sealed class MainForm : Form
             MessageBox.Show(this, $"建立周期失败:\n{ex.Message}", "账单管理",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>账户管理窗口:列出/新建/停用账户。</summary>
+    private void OnManageAccounts()
+    {
+        if (_ledger is null)
+            return;
+        using var dlg = new AccountListDialog(_ledger);
+        dlg.ShowDialog(this);
     }
 
     /// <summary>顶栏周期 chip:覆盖今天的进行中周期;没有则置灰提示。</summary>

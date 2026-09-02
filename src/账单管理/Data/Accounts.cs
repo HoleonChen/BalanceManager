@@ -58,4 +58,13 @@ ORDER BY sort_order, id;";
         }
         return list;
     }
+
+    /// <summary>停用账户(不再出现在记账/转账下拉;有流水约束,不物理删除)。</summary>
+    public static void Disable(LedgerSession s, long id)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE accounts SET enabled = 0 WHERE id = $id AND enabled = 1;";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
 }

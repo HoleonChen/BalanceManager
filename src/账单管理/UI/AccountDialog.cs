@@ -11,7 +11,7 @@ namespace ZhangDan;
 /// </summary>
 internal sealed class AccountDialog : Form
 {
-    private static readonly (string Label, string Key)[] TypeOptions =
+    internal static readonly (string Label, string Key)[] TypeOptions =
     {
         ("钱包(零钱/余额)", "wallet"),
         ("货币基金(零钱通/余额宝)", "money_fund"),
@@ -21,6 +21,17 @@ internal sealed class AccountDialog : Form
         ("基金", "fund"),
         ("储值卡(水卡等)", "prepaid"),
     };
+
+    /// <summary>类型 key → 中文标签(账户管理列表展示用)。</summary>
+    internal static string TypeLabel(string key)
+    {
+        foreach (var (label, k) in TypeOptions)
+        {
+            if (k == key)
+                return label;
+        }
+        return key;
+    }
 
     private static readonly string[] PlatformPresets =
         { "微信", "支付宝", "银行", "投资", "现金", "储值卡" };
