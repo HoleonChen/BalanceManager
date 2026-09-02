@@ -404,6 +404,67 @@ WHERE date = $date AND direction <> 'transfer' AND status <> 'cancelled';";
         return (r.GetInt64(0), r.GetInt64(1));
     }
 
+    /// <summary>CSV 全量导出行(含作废/退款,供外部分析/归档)。</summary>
+    internal sealed record TxnExportRow(
+        long Id,
+        string Date,
+        string Time,
+        string Direction,      // in | out | transfer
+        string Name,
+        string Category,
+        string Account,        // 转账=转出账户
+        string AccountTo,
+        long AmountCents,      // 转账=本金
+        long DeltaCents,
+        string Kind,           // 转账类别(收支为空)
+        string Channel,
+        string Note,
+        bool InPool,
+        string Status,         // normal | refunded | cancelled
+        string Period,         // 周期名(未归属为空)
+        string CreatedAt);
+
+    /// <summary>全量流水(含已作废/退款,转账同表),按日期、录入升序。</summary>
+    public static IReadOnlyList<TxnExportRow> ExportAll(LedgerSession s)
+    {
+        var list = new List<TxnExportRow>();
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT t.id, t.date, substr(t.created_at, 12, 5), t.direction,
+       t.name, c.name, a.name, b.name, t.amount_cents,
+       COALESCE(t.delta_cents, 0), COALESCE(t.transfer_kind, ''),
+       t.channel, t.note, t.in_pool, t.status, p.name, t.created_at
+FROM transactions t
+LEFT JOIN categories c ON c.id = t.category_id
+LEFT JOIN accounts a  ON a.id  = t.account_id
+LEFT JOIN accounts b  ON b.id  = t.to_account_id
+LEFT JOIN periods   p ON p.id  = t.period_id
+ORDER BY t.date, t.id;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new TxnExportRow(
+                r.GetInt64(0),
+                r.GetString(1),
+                r.IsDBNull(2) ? string.Empty : r.GetString(2),
+                r.GetString(3),
+                r.GetString(4),
+                r.IsDBNull(5) ? string.Empty : r.GetString(5),
+                r.IsDBNull(6) ? string.Empty : r.GetString(6),
+                r.IsDBNull(7) ? string.Empty : r.GetString(7),
+                r.GetInt64(8),
+                r.GetInt64(9),
+                r.GetString(10),
+                r.IsDBNull(11) ? string.Empty : r.GetString(11),
+                r.IsDBNull(12) ? string.Empty : r.GetString(12),
+                r.GetInt32(13) != 0,
+                r.GetString(14),
+                r.IsDBNull(15) ? string.Empty : r.GetString(15),
+                r.IsDBNull(16) ? string.Empty : r.GetString(16)));
+        }
+        return list;
+    }
+
     /// <summary>取一笔的日期(写保护/回填用);不存在返回 null。</summary>
     private static string? RowDate(LedgerSession s, long id)
     {

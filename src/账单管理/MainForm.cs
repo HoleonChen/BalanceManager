@@ -14,6 +14,7 @@ internal sealed class MainForm : Form
     private readonly AppSettings _settings;
     private readonly ToolStripStatusLabel _statusLabel = new();
     private ToolStripMenuItem _closeLedgerItem = null!;
+    private ToolStripMenuItem _exportItem = null!;
     private ToolStripMenuItem _newPeriodItem = null!;
     private ToolStripMenuItem _accountsItem = null!;
     private ToolStripMenuItem _categoriesItem = null!;
@@ -63,6 +64,10 @@ internal sealed class MainForm : Form
         file.DropDownItems.Add(_closeLedgerItem);
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add(MakeItem("打开账本目录…", null, (_, _) => OpenDataDir()));
+        file.DropDownItems.Add(new ToolStripSeparator());
+        _exportItem = MakeItem("导出全量 CSV…", null, (_, _) => OnExportCsv());
+        _exportItem.Enabled = false;
+        file.DropDownItems.Add(_exportItem);
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add(MakeItem("退出(&X)", null, (_, _) => Close()));
 
@@ -330,6 +335,7 @@ internal sealed class MainForm : Form
         _ledger?.Dispose();
         _ledger = null;
         _closeLedgerItem.Enabled = false;
+        _exportItem.Enabled = false;
         _newPeriodItem.Enabled = false;
         _accountsItem.Enabled = false;
         _categoriesItem.Enabled = false;
@@ -348,6 +354,7 @@ internal sealed class MainForm : Form
         _ledger?.Dispose();
         _ledger = session;
         _closeLedgerItem.Enabled = true;
+        _exportItem.Enabled = true;
         _newPeriodItem.Enabled = true;
         _accountsItem.Enabled = true;
         _categoriesItem.Enabled = true;
@@ -454,6 +461,46 @@ internal sealed class MainForm : Form
             return;
         using var dlg = new CategoryManageDialog(_ledger);
         dlg.ShowDialog(this);
+    }
+
+    /// <summary>导出全量流水 CSV(含已作废/退款;UTF-8 BOM,Excel 可直开)。</summary>
+    private void OnExportCsv()
+    {
+        if (_ledger is null)
+            return;
+
+        using var save = new SaveFileDialog
+        {
+            Title = "导出全量流水 CSV",
+            Filter = "CSV 文件 (*.csv)|*.csv",
+            FileName = $"{SafeFileName(_ledger.Name)}_全量流水_{DateTime.Today:yyyyMMdd}.csv",
+            DefaultExt = ".csv",
+            AddExtension = true,
+            InitialDirectory = AppPaths.UserDataDir
+        };
+        if (save.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            var rows = Transactions.ExportAll(_ledger);
+            CsvExporter.Save(save.FileName, CsvExporter.Build(rows));
+            MessageBox.Show(this,
+                $"已导出 {rows.Count} 笔流水(含作废/退款)到:\n{save.FileName}",
+                "导出 CSV", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"导出失败:\n{ex.Message}", "导出 CSV",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private static string SafeFileName(string name)
+    {
+        foreach (var ch in Path.GetInvalidFileNameChars())
+            name = name.Replace(ch, '_');
+        return name.Length == 0 ? "账本" : name;
     }
 
     /// <summary>校准余额(对准某账户实际;含审计历史)。</summary>

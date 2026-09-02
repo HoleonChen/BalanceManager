@@ -241,6 +241,9 @@ internal static class DbSelfTest
 
         // 分类管理:收支隔离 / 改名改色关键词 / 排序上移 / 合并改挂 / 删除先清交易
         CategoryFlow(s, steps);
+
+        // CSV 导出:转义正确 + 全量行数与库内流水一致
+        CsvFlow(s, steps);
     }
 
     /// <summary>校准余额断言:账面派生 / 记调整流水 / 仅改基准 / 补记明细(仅审计) / 审计历史。</summary>
@@ -621,6 +624,38 @@ WHERE account_id = $a AND name = '差额调整' AND direction = 'out'
         if (Categories.ListManual(s, false).Any(c => c.Id == z2))
             throw new Exception("清空流水后删除未生效。");
         steps.Add("分类:使用中删除被拦 → 合并清空后可删");
+    }
+
+    /// <summary>CSV 导出断言:含逗号/引号的字段正确加引号转义;转账/作废等中文标签输出;全量行数=库内流水数。</summary>
+    private static void CsvFlow(LedgerSession s, List<string> steps)
+    {
+        var samples = new List<Transactions.TxnExportRow>
+        {
+            new(1, "2026-01-02", "08:30", "in", "利息,含\"引号\"", "生活费", "微信", "",
+                12345, 0, "", "", "入账", true, "normal", "2026春·1月", "2026-01-02 08:30:00"),
+            new(2, "2026-01-03", "09:00", "transfer", "互转", "", "银行卡", "零钱",
+                10000, -50, "提现", "", "", false, "cancelled", "2026春·1月", "2026-01-03 09:00:00")
+        };
+        var csv = CsvExporter.Build(samples);
+        if (!csv.StartsWith("ID,日期,时间,方向,名称,分类,账户,转入账户,金额(元),浮动(元),转账类别,渠道,备注,计入池,状态,周期,创建时间", StringComparison.Ordinal)
+            || !csv.Contains("\"利息,含\"\"引号\"\"\"", StringComparison.Ordinal)
+            || !csv.Contains("转账", StringComparison.Ordinal)
+            || !csv.Contains("已作废", StringComparison.Ordinal)
+            || !csv.Contains("-100.00", StringComparison.Ordinal)
+            || !csv.Contains("-0.50", StringComparison.Ordinal))
+            throw new Exception("CSV 转义/内容不符(含引号逗号字段、转账负号、作废标记)。");
+        steps.Add("CSV:转义(引号/逗号)、金额符号、状态标签正确");
+
+        // 全量行数应等于库内流水总数(含作废/退款)
+        long dbCount;
+        using (var cmd = s.Connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM transactions;";
+            dbCount = Convert.ToInt64(cmd.ExecuteScalar());
+        }
+        if (Transactions.ExportAll(s).Count != dbCount)
+            throw new Exception("全量导出行数与库内流水数不一致(应含作废/退款)。");
+        steps.Add("CSV:全量导出行数 = 库内流水数");
     }
 
     private static int IndexOfId(IReadOnlyList<CategoryRow> rows, long id)
