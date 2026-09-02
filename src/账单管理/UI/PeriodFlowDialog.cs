@@ -5,14 +5,17 @@ using System.Windows.Forms;
 namespace ZhangDan;
 
 /// <summary>
-/// 本周期流水(只读总览):当前周期起止内全部流水(日期/时间/名称/分类/账户/金额),
-/// 顶栏给出周期支出/收入合计。为设计「流水 Tab(内容视图)」的先声。
+/// 本周期流水总览:当前周期起止内全部流水(日期/时间/名称/分类/账户/金额),
+/// 顶栏给出周期支出/收入合计;支持右键/Delete 作废(撤出统计,即时刷新)。
+/// 为设计「流水 Tab(内容视图)」的先声。
 /// </summary>
 internal sealed class PeriodFlowDialog : Form
 {
     private readonly LedgerSession _ledger;
+    private readonly string _periodName;
     private readonly string _start;
     private readonly string _end;
+    private readonly Label _summary = new() { AutoSize = true, ForeColor = SystemColors.GrayText };
 
     private readonly ListView _list = new()
     {
@@ -26,6 +29,7 @@ internal sealed class PeriodFlowDialog : Form
     public PeriodFlowDialog(LedgerSession ledger, string periodName, string start, string end)
     {
         _ledger = ledger;
+        _periodName = periodName;
         _start = start;
         _end = end;
 
@@ -41,13 +45,32 @@ internal sealed class PeriodFlowDialog : Form
         _list.Columns.Add("账户", 190);
         _list.Columns.Add("金额", 130, HorizontalAlignment.Right);
 
-        var top = new Panel { Dock = DockStyle.Top, Height = 40, Padding = new Padding(12, 10, 0, 0) };
-        var summary = new Label
+        // 右键/Delete 作废
+        var ctx = new ContextMenuStrip();
+        var cancel = new ToolStripMenuItem("作废/删除这笔…");
+        cancel.Click += (_, _) => CancelSelected();
+        ctx.Items.Add(cancel);
+        _list.ContextMenuStrip = ctx;
+        _list.MouseDown += (_, e) =>
         {
-            AutoSize = true,
-            ForeColor = SystemColors.GrayText
+            if (e.Button != MouseButtons.Right)
+                return;
+            _list.SelectedItems.Clear();
+            var hit = _list.GetItemAt(e.X, e.Y);
+            if (hit != null)
+                hit.Selected = true;
         };
-        top.Controls.Add(summary);
+        _list.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Delete)
+            {
+                CancelSelected();
+                e.Handled = true;
+            }
+        };
+
+        var top = new Panel { Dock = DockStyle.Top, Height = 40, Padding = new Padding(12, 10, 0, 0) };
+        top.Controls.Add(_summary);
 
         var bottom = new FlowLayoutPanel
         {
@@ -63,11 +86,18 @@ internal sealed class PeriodFlowDialog : Form
         Controls.Add(top);
         Controls.Add(bottom);
 
-        // 内容
+        Reload();
+    }
+
+    /// <summary>重建列表与顶栏合计。</summary>
+    private void Reload()
+    {
         _list.BeginUpdate();
-        foreach (var t in Transactions.ListByRange(_ledger, start, end))
+        _list.Items.Clear();
+        foreach (var t in Transactions.ListByRange(_ledger, _start, _end))
         {
             var li = new ListViewItem(t.Date);
+            li.Tag = t;
             li.SubItems.Add(t.Time);
 
             if (t.Direction == "transfer")
@@ -99,9 +129,26 @@ internal sealed class PeriodFlowDialog : Form
         }
         _list.EndUpdate();
 
-        var (outCents, inCents) = Transactions.RangeTotals(_ledger, start, end);
-        summary.Text =
-            $"{periodName}:{Short(start)}~{Short(end)}   周期支出 {Money.Yuan(outCents)} · 周期收入 {Money.Yuan(inCents)} · {_list.Items.Count} 笔(不含作废)";
+        var (outCents, inCents) = Transactions.RangeTotals(_ledger, _start, _end);
+        _summary.Text =
+            $"{_periodName}:{Short(_start)}~{Short(_end)}   周期支出 {Money.Yuan(outCents)} · 周期收入 {Money.Yuan(inCents)} · {_list.Items.Count} 笔(不含作废)";
+    }
+
+    private void CancelSelected()
+    {
+        if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not TxnListItem t)
+            return;
+
+        var head = t.Direction == "transfer"
+            ? $"作废这笔转账?\n\n  {t.Name} · {t.Account} → {t.AccountTo}\n  {Money.Yuan(t.AmountCents)}"
+            : $"作废这笔并撤出统计?\n\n  {t.Name}\n  {(t.Direction == "out" ? "-" : "+")}{Money.Yuan(t.AmountCents)} · {t.Account}";
+        if (MessageBox.Show(this,
+                head + "\n\n记录仍留在库中(标记作废),只是不再计入统计。",
+                "作废流水", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+            return;
+
+        Transactions.Cancel(_ledger, t.Id);
+        Reload();
     }
 
     private static string Short(string iso)
