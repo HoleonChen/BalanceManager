@@ -184,15 +184,8 @@ internal sealed class CategoryCreateDialog : Window
     private readonly TextBox _name = new() { Width = 300 };
     private readonly TextBox _keyword = new() { Width = 300 };
     private readonly TextBox _color = new() { Width = 110 };
-    private readonly Border _preview = new()
-    {
-        Width = 60,
-        Height = 22,
-        BorderBrush = Brushes.Gray,
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(3),
-        VerticalAlignment = VerticalAlignment.Center
-    };
+    private readonly Border _vividPreview = NewPreview();
+    private readonly Border _lightPreview = NewPreview();
     private readonly TextBlock _error = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
 
     public string CategoryName => _name.Text.Trim();
@@ -234,10 +227,15 @@ internal sealed class CategoryCreateDialog : Window
         var colorRow = new StackPanel();
         colorRow.Children.Add(swatches);
         var editRow = new DockPanel { Margin = new Thickness(0, 2, 0, 0) };
-        DockPanel.SetDock(_preview, Dock.Right);
+        var pair = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        pair.Children.Add(_vividPreview);
+        pair.Children.Add(new TextBlock { Text = " + ", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) });
+        pair.Children.Add(_lightPreview);
+        pair.Children.Add(new TextBlock { Text = "(鲜艳+淡)", Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) });
+        DockPanel.SetDock(pair, Dock.Right);
         DockPanel.SetDock(_color, Dock.Left);
         editRow.Children.Add(_color);
-        editRow.Children.Add(_preview);
+        editRow.Children.Add(pair);
         colorRow.Children.Add(editRow);
 
         var ok = new Button { Content = name is null ? "创建" : "保存", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
@@ -257,9 +255,28 @@ internal sealed class CategoryCreateDialog : Window
         Content = panel;
     }
 
+    private static Border NewPreview() => new()
+    {
+        Width = 56,
+        Height = 22,
+        BorderBrush = Brushes.Gray,
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(3),
+        VerticalAlignment = VerticalAlignment.Center
+    };
+
     private void RefreshPreview()
     {
-        _preview.Background = Parse(_color.Text.Trim());
+        var hex = _color.Text.Trim();
+        _vividPreview.Background = Parse(hex);
+        _lightPreview.Background = Parse(hex) is SolidColorBrush b ? Lighten(b.Color) : null;
+    }
+
+    /// <summary>淡色 = 鲜艳色与白色按 60% 混合(自动派生,不另存)。</summary>
+    private static Brush Lighten(Color c)
+    {
+        byte Mix(byte v) => (byte)(v + (255 - v) * 0.6);
+        return new SolidColorBrush(System.Windows.Media.Color.FromRgb(Mix(c.R), Mix(c.G), Mix(c.B)));
     }
 
     private static Brush? Parse(string hex)
