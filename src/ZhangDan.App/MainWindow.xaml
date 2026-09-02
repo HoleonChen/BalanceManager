@@ -1,12 +1,11 @@
-<ui:FluentWindow x:Class="ZhangDan.App.MainWindow"
-                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-                 Title="账单管理"
-                 Height="780" Width="1200"
-                 MinHeight="620" MinWidth="1000"
-                 WindowStartupLocation="CenterScreen"
-                 FontFamily="Microsoft YaHei UI">
+<Window x:Class="ZhangDan.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="账单管理"
+        Height="780" Width="1200"
+        MinHeight="620" MinWidth="1000"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Microsoft YaHei UI">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="216"/>
@@ -66,4 +65,4 @@
             </Grid>
         </Grid>
     </Grid>
-</ui:FluentWindow>
+</Window>
