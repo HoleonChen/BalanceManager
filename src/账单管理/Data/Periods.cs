@@ -28,7 +28,16 @@ VALUES ($name, $start, $end, 'active');";
         cmd.ExecuteNonQuery();
 
         cmd.CommandText = "SELECT last_insert_rowid();";
-        return Convert.ToInt64(cmd.ExecuteScalar());
+        var id = Convert.ToInt64(cmd.ExecuteScalar());
+
+        // 补归属:此前已记、落在本期范围内且仍属「未归属」的流水,一并归入本期
+        cmd.CommandText = endDate is null
+            ? "UPDATE transactions SET period_id = $pid WHERE period_id IS NULL AND date >= $start;"
+            : "UPDATE transactions SET period_id = $pid WHERE period_id IS NULL AND date BETWEEN $start AND $end;";
+        cmd.Parameters.AddWithValue("$pid", id);
+        cmd.ExecuteNonQuery();
+
+        return id;
     }
 
     /// <summary>列出进行中周期,按开始日倒序。</summary>

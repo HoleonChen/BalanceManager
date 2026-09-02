@@ -81,8 +81,32 @@ internal static class DbSelfTest
 
         var today = DateTime.Today;
         var date = today.ToString("yyyy-MM-dd");
+
+        // ① 未建周期前记账 → 保持未归属
+        var early = today.AddDays(-4).ToString("yyyy-MM-dd");
+        var id0 = Transactions.Add(s, new TxnDraft
+        {
+            Date = early,
+            Direction = "out",
+            AccountId = accountA,
+            CategoryId = 1,          // 餐饮
+            AmountCents = 3000,
+            Name = "预记",
+            Note = "",
+            Channel = "",
+            InPool = true
+        });
+        if (GetPeriodId(s, id0) is not null)
+            throw new Exception("未建周期时记账应保持未归属。");
+        steps.Add("无周期先记账 → 未归属");
+
+        // ② 补建覆盖期(含早前流水)的周期 → 回填期内未归属流水
+        var periodStart = today.AddDays(-5).ToString("yyyy-MM-dd");
         var periodEnd = today.AddDays(30).ToString("yyyy-MM-dd");
-        var periodId = Periods.Insert(s, "生活费", date, periodEnd);
+        var periodId = Periods.Insert(s, "生活费", periodStart, periodEnd);
+        if (GetPeriodId(s, id0) != periodId)
+            throw new Exception("补建周期后未回填期内流水。");
+        steps.Add("补建周期 → 回填期内未归属流水");
 
         var id = Transactions.Add(s, new TxnDraft
         {
