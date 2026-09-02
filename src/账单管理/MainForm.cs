@@ -182,6 +182,7 @@ internal sealed class MainForm : Form
         delete.Click += (_, _) => DeleteSelected();
         ctx.Items.Add(delete);
         _todayList.ContextMenuStrip = ctx;
+        _todayList.DoubleClick += (_, _) => EditSelected();
         _todayList.MouseDown += (_, e) =>
         {
             if (e.Button != MouseButtons.Right)
@@ -515,6 +516,51 @@ internal sealed class MainForm : Form
 
         Transactions.Cancel(_ledger, t.Id);
         RefreshView();
+    }
+
+    /// <summary>双击列表行:就地编辑该笔支出/收入(转账暂不支持就地编辑)。</summary>
+    private void EditSelected()
+    {
+        if (_ledger is null || _todayList.SelectedItems.Count == 0)
+            return;
+        if (_todayList.SelectedItems[0].Tag is not TxnListItem t)
+            return;
+
+        if (t.Direction == "transfer")
+        {
+            MessageBox.Show(this, "转账暂不支持就地编辑;可右键作废后重新记一笔。",
+                "账单管理", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var edit = Transactions.GetEditable(_ledger, t.Id);
+        if (edit is null)
+            return;
+
+        using var dlg = new RecordDialog(_ledger, _settings, edit);
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            Transactions.Update(_ledger, edit with
+            {
+                Direction = dlg.Direction,
+                AccountId = dlg.AccountId,
+                CategoryId = dlg.CategoryId,
+                AmountCents = dlg.AmountCents,
+                Name = dlg.TxnName,
+                Channel = dlg.Channel,
+                Note = dlg.Note,
+                InPool = dlg.InPool
+            });
+            RefreshView();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"保存失败:\n{ex.Message}", "账单管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void Remember(string path)

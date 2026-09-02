@@ -32,6 +32,7 @@ internal sealed class RecordDialog : Form
     private readonly List<AccountRow> _accounts = new();
     private readonly List<CategoryRow> _expenseCats;
     private readonly List<CategoryRow> _incomeCats;
+    private readonly TxnEditable? _edit;   // 非空 = 编辑已记的一笔(日期固定)
 
     private int _y = 16;
 
@@ -46,14 +47,15 @@ internal sealed class RecordDialog : Form
     public string Channel { get; private set; } = "";
     public bool InPool { get; private set; }
 
-    public RecordDialog(LedgerSession ledger, AppSettings settings)
+    public RecordDialog(LedgerSession ledger, AppSettings settings, TxnEditable? edit = null)
     {
         _ledger = ledger;
         _settings = settings;
+        _edit = edit;
         _expenseCats = new List<CategoryRow>(Categories.ListManual(_ledger, income: false));
         _incomeCats = new List<CategoryRow>(Categories.ListManual(_ledger, income: true));
 
-        Text = "记一笔";
+        Text = edit is null ? "记一笔" : "编辑流水";
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
@@ -65,6 +67,48 @@ internal sealed class RecordDialog : Form
         ReloadAccounts(selectNew: false);
         ApplyDirection();
         ReloadDateCheck();
+
+        if (edit is not null)
+            Prefill(edit);
+    }
+
+    /// <summary>把已有流水回填到控件上(仅编辑模式)。日期固定,不提供改期。</summary>
+    private void Prefill(TxnEditable e)
+    {
+        // 方向(触发 ApplyDirection,同步分类与池勾选状态)
+        if (e.Direction == "in")
+            _inRadio.Checked = true;
+        else
+            _outRadio.Checked = true;
+
+        var ai = _accounts.FindIndex(a => a.Id == e.AccountId);
+        if (ai >= 0)
+            _accountBox.SelectedIndex = ai;
+
+        if (e.CategoryId is long cid)
+        {
+            var cats = _inRadio.Checked ? _incomeCats : _expenseCats;
+            var ci = cats.FindIndex(c => c.Id == cid);
+            if (ci >= 0)
+                _categoryBox.SelectedIndex = ci;
+        }
+
+        _amountBox.Text = (e.AmountCents / 100m).ToString("0.##", CultureInfo.InvariantCulture);
+        _nameBox.Text = e.Name;
+        for (int i = 0; i < _channelBox.Items.Count; i++)
+        {
+            if (string.Equals(_channelBox.Items[i]?.ToString(), e.Channel, StringComparison.Ordinal))
+            {
+                _channelBox.SelectedIndex = i;
+                break;
+            }
+        }
+        _noteBox.Text = e.Note;
+        _poolCheck.Checked = e.InPool;
+
+        // 日期固定(改日期请作废后重记);关掉「记昨天」避免误改
+        _yesterdayCheck.Text = $"日期固定:{e.Date}";
+        _yesterdayCheck.Enabled = false;
     }
 
     private void BuildUi()
@@ -220,7 +264,9 @@ internal sealed class RecordDialog : Form
 
         var income = _inRadio.Checked;
         var now = DateTime.Now;
-        DateStr = (_yesterdayCheck.Checked ? now.AddDays(-1) : now).ToString("yyyy-MM-dd");
+        DateStr = _edit is null
+            ? (_yesterdayCheck.Checked ? now.AddDays(-1) : now).ToString("yyyy-MM-dd")
+            : _edit.Date;   // 编辑不改日期
         Direction = income ? "in" : "out";
         AccountId = account.Id;
         CategoryId = category.Id;

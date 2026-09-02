@@ -182,6 +182,18 @@ internal static class DbSelfTest
         if (outAfter != 0)
             throw new Exception("作废后合计未撤出。");
         steps.Add("作废一笔 → 撤出列表与合计");
+
+        // 就地编辑:改早前那笔(仍正常)的金额/名称,合计与读回应更新
+        var e0 = Transactions.GetEditable(s, id0)
+            ?? throw new Exception("读不到待编辑流水。");
+        Transactions.Update(s, e0 with { AmountCents = 5500, Name = "预记改" });
+        var e1 = Transactions.GetEditable(s, id0);
+        if (e1 is null || e1.AmountCents != 5500 || e1.Name != "预记改")
+            throw new Exception("就地编辑未生效。");
+        var (outEarly, _) = Transactions.DayTotals(s, early);
+        if (outEarly != 5500)
+            throw new Exception("编辑后合计未更新。");
+        steps.Add("就地编辑 → 金额/名称更新,合计刷新");
     }
 
     private static long? GetPeriodId(LedgerSession s, long txId)

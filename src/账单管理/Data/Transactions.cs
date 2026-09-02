@@ -31,6 +31,19 @@ internal sealed class TransferDraft
     public bool InPool { get; init; }                 // 转出池账户默认不计池,可勾
 }
 
+/// <summary>可编辑的一笔支出/收入(编辑表单回填用;转账独立处理)。</summary>
+internal sealed record TxnEditable(
+    long Id,
+    string Date,          // yyyy-MM-dd(编辑不改日期)
+    string Direction,     // in | out
+    long AccountId,
+    long? CategoryId,
+    long AmountCents,
+    string Name,
+    string Channel,
+    string Note,
+    bool InPool);
+
 /// <summary>流水展示行(带账户/分类名、时间 HH:mm;转账含对端账户/浮动/类别)。</summary>
 internal sealed class TxnListItem
 {
@@ -115,6 +128,52 @@ VALUES
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = "UPDATE transactions SET status = 'cancelled' WHERE id = $id AND status <> 'cancelled';";
         cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>按 id 读一笔支出/收入(转账/已作废返回 null)。</summary>
+    public static TxnEditable? GetEditable(LedgerSession s, long id)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT id, date, direction, account_id, category_id, amount_cents, name, channel, note, in_pool
+FROM transactions
+WHERE id = $id AND direction <> 'transfer' AND status <> 'cancelled';";
+        cmd.Parameters.AddWithValue("$id", id);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read())
+            return null;
+        return new TxnEditable(
+            r.GetInt64(0),
+            r.GetString(1),
+            r.GetString(2),
+            r.GetInt64(3),
+            r.IsDBNull(4) ? (long?)null : r.GetInt64(4),
+            r.GetInt64(5),
+            r.GetString(6),
+            r.GetString(7),
+            r.GetString(8),
+            r.GetInt32(9) != 0);
+    }
+
+    /// <summary>就地修改一笔支出/收入(改方向/账户/分类/金额/名称/渠道/备注/入池;日期与周期归属保持不变)。</summary>
+    public static void Update(LedgerSession s, TxnEditable t)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+UPDATE transactions
+SET direction = $dir, account_id = $acct, category_id = $cat, amount_cents = $amount,
+    name = $name, note = $note, channel = $channel, in_pool = $pool
+WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$dir", t.Direction);
+        cmd.Parameters.AddWithValue("$acct", t.AccountId);
+        cmd.Parameters.AddWithValue("$cat", (object?)t.CategoryId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$amount", t.AmountCents);
+        cmd.Parameters.AddWithValue("$name", t.Name);
+        cmd.Parameters.AddWithValue("$note", t.Note);
+        cmd.Parameters.AddWithValue("$channel", t.Channel);
+        cmd.Parameters.AddWithValue("$pool", t.InPool ? 1 : 0);
+        cmd.Parameters.AddWithValue("$id", t.Id);
         cmd.ExecuteNonQuery();
     }
 
