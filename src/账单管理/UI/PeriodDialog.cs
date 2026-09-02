@@ -8,7 +8,7 @@ namespace ZhangDan;
 /// 新建记账周期:名称 + 起止日期。周期内记的流水按日期自动归属到本期(见 Transactions.Add)。
 /// 生活费周期是账本组织核心:结束日期可选(不设 = 长期进行,人工收尾)。
 /// </summary>
-internal sealed class PeriodDialog : Form
+internal sealed class PeriodDialog : FormBase
 {
     private readonly TextBox _nameBox = new();
     private readonly DateTimePicker _startPicker = new();

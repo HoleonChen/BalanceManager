@@ -8,7 +8,7 @@ namespace ZhangDan;
 /// 账户管理:列出全部账户(名称/平台/类型/入账余额;停用的灰显),可新建、停用、重新启用。
 /// 停用后不再出现在记账/转账下拉;账户表不物理删除(流水外键约束 + 历史归属)。
 /// </summary>
-internal sealed class AccountListDialog : Form
+internal sealed class AccountListDialog : FormBase
 {
     private readonly LedgerSession _ledger;
     private readonly Label _summaryLabel = new() { AutoSize = true };

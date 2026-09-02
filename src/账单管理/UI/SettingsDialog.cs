@@ -8,7 +8,7 @@ namespace ZhangDan;
 /// 设置(工具菜单):凌晨宽限开关 + 数据目录信息。
 /// 偏好存 %APPDATA%\账单管理\app.json;口令等敏感内容不落文件。
 /// </summary>
-internal sealed class SettingsDialog : Form
+internal sealed class SettingsDialog : FormBase
 {
     private readonly AppSettings _settings;
     private readonly CheckBox _graceCheck;
@@ -32,6 +32,7 @@ internal sealed class SettingsDialog : Form
         {
             Text = "凌晨宽限:0:00~6:00 记一笔时默认记到「昨天」",
             Checked = _settings.MidnightGraceEnabled,
+            AutoSize = true,          // 长文本不被默认窄宽度截断(实测曾只显示「凌晨宽」)
             Location = new Point(xl, y)
         };
         var graceHint = new Label

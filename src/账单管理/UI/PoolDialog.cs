@@ -11,7 +11,7 @@ namespace ZhangDan;
 /// 单池 = 一个池绑一个账户(默认=本期生活费入账账户),预算(可花额度)+ 预计保留(留多少不动)。
 /// 已花由账目实时派生,本对话框只改设置,不改流水。
 /// </summary>
-internal sealed class PoolDialog : Form
+internal sealed class PoolDialog : FormBase
 {
     private readonly LedgerSession _ledger;
     private readonly PeriodRow _period;

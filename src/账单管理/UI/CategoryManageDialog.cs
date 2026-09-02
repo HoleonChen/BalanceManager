@@ -9,7 +9,7 @@ namespace ZhangDan;
 /// 分类管理(设计 §9):支出/收入顶层大类——新建 / 重命名 / 改色 / 关键词 / 上移下移(叠放序)/
 /// 合并(流水改挂 + 关键词并入)/ 删除(须先清流水:先合并)。子类(「差额调整」)不在此列、不可删。
 /// </summary>
-internal sealed class CategoryManageDialog : Form
+internal sealed class CategoryManageDialog : FormBase
 {
     // 固定高区分度调色板(与 seed 配色一致,色盲友好);新建自动按序取色,可手动改。
     private static readonly string[] Palette =
@@ -330,7 +330,7 @@ internal sealed class CategoryManageDialog : Form
     }
 
     /// <summary>新建/重命名/关键词 共用的单字段(或双字段)小表单。</summary>
-    private sealed class CategoryInputDialog : Form
+    private sealed class CategoryInputDialog : FormBase
     {
         private readonly TextBox _name = new();
         private readonly TextBox? _kw;
@@ -395,7 +395,7 @@ internal sealed class CategoryManageDialog : Form
     }
 
     /// <summary>合并目标选择:列出同收支、排除自身与带子分类的顶层分类。</summary>
-    private sealed class MergeTargetDialog : Form
+    private sealed class MergeTargetDialog : FormBase
     {
         private readonly ComboBox _box = new() { DropDownStyle = ComboBoxStyle.DropDownList };
 

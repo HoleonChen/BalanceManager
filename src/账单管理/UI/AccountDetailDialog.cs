@@ -8,7 +8,7 @@ namespace ZhangDan;
 /// 账户详情:当前余额(派生)= 基准 + 基准日后净变动,本周期(覆盖今天的进行中周期)收支转构成,
 /// 及该账户在对应范围内的流水。停用账户灰显、不计净资产(净资产合计见账户管理顶栏)。
 /// </summary>
-internal sealed class AccountDetailDialog : Form
+internal sealed class AccountDetailDialog : FormBase
 {
     private readonly LedgerSession _ledger;
     private readonly long _accountId;

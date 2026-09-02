@@ -9,7 +9,7 @@ namespace ZhangDan;
 /// 新建账户:名称 + 类型 + 平台 + 可选当前余额。
 /// 账户表默认为空,不预置资产账户——真实账户由用户按需创建、日后导入补全。
 /// </summary>
-internal sealed class AccountDialog : Form
+internal sealed class AccountDialog : FormBase
 {
     internal static readonly (string Label, string Key)[] TypeOptions =
     {

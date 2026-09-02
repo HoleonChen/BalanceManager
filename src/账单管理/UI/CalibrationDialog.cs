@@ -13,7 +13,7 @@ namespace ZhangDan;
 ///  3 仅更新基准(不动流水,直接平移基准余额)
 /// 底部展示该账户校准历史(审计)。未指定账户时可下拉切换。
 /// </summary>
-internal sealed class CalibrationDialog : Form
+internal sealed class CalibrationDialog : FormBase
 {
     private readonly LedgerSession _ledger;
     private readonly List<AccountRow> _accounts;

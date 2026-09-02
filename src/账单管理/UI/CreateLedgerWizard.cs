@@ -9,7 +9,7 @@ namespace ZhangDan;
 /// 新建账本向导(单页表单):账本名 + 存放位置 + 口令设定。
 /// 点「创建」由调用方真正建库(此处只负责收集与校验)。
 /// </summary>
-internal sealed class CreateLedgerWizard : Form
+internal sealed class CreateLedgerWizard : FormBase
 {
     private const int MinPasswordLength = 6;
 

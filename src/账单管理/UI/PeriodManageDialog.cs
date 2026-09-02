@@ -9,7 +9,7 @@ namespace ZhangDan;
 /// 周期管理:列出全部周期(进行中/已到期未封存/已封存),支持封存、解除封存、查看流水、新建。
 /// 生命周期见设计 §1/§6:到期 → 推荐新建;封存 = 真正终结(只读);可解除封存恢复。
 /// </summary>
-internal sealed class PeriodManageDialog : Form
+internal sealed class PeriodManageDialog : FormBase
 {
     private readonly LedgerSession _ledger;
     private readonly Label _hint = new() { AutoSize = true, ForeColor = Color.DarkOrange };

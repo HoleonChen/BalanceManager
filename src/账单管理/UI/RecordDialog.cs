@@ -10,7 +10,7 @@ namespace ZhangDan;
 /// 记一笔:支出 / 收入。
 /// 转账语义复杂(本金+浮动+分类、双账户),按设计文档 §3.5 单独实现,不进本对话框。
 /// </summary>
-internal sealed class RecordDialog : Form
+internal sealed class RecordDialog : FormBase
 {
     private readonly LedgerSession _ledger;
     private readonly AppSettings _settings;

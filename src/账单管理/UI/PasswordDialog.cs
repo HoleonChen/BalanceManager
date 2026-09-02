@@ -5,7 +5,7 @@ using System.Windows.Forms;
 namespace ZhangDan;
 
 /// <summary>口令输入小对话框(打开账本/启动自动加载时用)。</summary>
-internal sealed class PasswordDialog : Form
+internal sealed class PasswordDialog : FormBase
 {
     private readonly TextBox _passwordBox;
 

@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS fund_pools (
   created_at    TEXT NOT NULL
 );
 
--- 单池:每个周期至多一个资金池(设计一期只做单池);upsert 靠此唯一约束
+-- 单池:每周期至多一个资金池,upsert 依赖此唯一约束
 CREATE UNIQUE INDEX IF NOT EXISTS ux_fund_pools_period ON fund_pools(period_id);
 
 CREATE TABLE IF NOT EXISTS reserve_items (
@@ -148,6 +148,12 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order) VALUES
             SetMeta(conn, "ledger.name", ledgerName);
             SetMeta(conn, "created_at", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
         }
+        else if (version < CurrentVersion)
+        {
+            // 老库升级:早期版本建表时还没有 fund_pools / reserve_items / calibration_log 等表,
+            // 补跑一遍幂等 DDL(全部 IF NOT EXISTS)把这些表补上,再走各自增量迁移。
+            ExecEach(conn, Ddl);
+        }
 
         if (version < 2)
         {
@@ -192,7 +198,17 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order) VALUES
 
     private static void ExecEach(SqliteConnection conn, string sql)
     {
-        foreach (var statement in sql.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        // 先整段执行前去掉「整行注释」:注释里的 ';' 若参与切分会把残句当 SQL,出现
+        // 「near '...': syntax error」(如历史 bug:注释里写 ';upsert ...')。
+        var cleaned = new System.Text.StringBuilder();
+        foreach (var line in sql.Split('\n'))
+        {
+            if (line.TrimStart().StartsWith("--", StringComparison.Ordinal))
+                continue;
+            cleaned.AppendLine(line);
+        }
+
+        foreach (var statement in cleaned.ToString().Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
             if (string.IsNullOrWhiteSpace(statement))
                 continue;

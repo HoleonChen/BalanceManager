@@ -9,7 +9,7 @@ namespace ZhangDan;
 /// 主窗体:文件菜单(新建/打开/关闭/退出)+ 状态栏。
 /// 启动时自动加载上次账本(见设计文档「账本文件与启动」)。
 /// </summary>
-internal sealed class MainForm : Form
+internal sealed class MainForm : FormBase
 {
     private readonly AppSettings _settings;
     private readonly ToolStripStatusLabel _statusLabel = new();

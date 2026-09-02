@@ -11,7 +11,7 @@ namespace ZhangDan;
 /// 五类:互转/充值/提现/理财结算/存取;「实际到账」与本金之差即浮动 Δ
 /// (Δ&gt;0 记收益、Δ&lt;0 记手续费)。转出账户若为池账户,默认不入池,可勾「计入池」。
 /// </summary>
-internal sealed class TransferDialog : Form
+internal sealed class TransferDialog : FormBase
 {
     private static readonly string[] Kinds = { "互转", "充值", "提现", "理财结算", "存取" };
 

@@ -9,7 +9,7 @@ namespace ZhangDan;
 /// 顶栏给出周期支出/收入合计;支持右键/Delete 作废(撤出统计,即时刷新)。
 /// 为设计「流水 Tab(内容视图)」的先声。
 /// </summary>
-internal sealed class PeriodFlowDialog : Form
+internal sealed class PeriodFlowDialog : FormBase
 {
     private readonly LedgerSession _ledger;
     private readonly string _periodName;
