@@ -59,6 +59,8 @@ internal sealed class MainForm : Form
         file.DropDownItems.Add(MakeItem("退出(&X)", null, (_, _) => Close()));
 
         var tools = new ToolStripMenuItem("工具(&T)");
+        tools.DropDownItems.Add(MakeItem("设置…", null, (_, _) => OnSettings()));
+        tools.DropDownItems.Add(new ToolStripSeparator());
         _accountsItem = MakeItem("账户管理…", null, (_, _) => OnManageAccounts());
         _accountsItem.Enabled = false;
         tools.DropDownItems.Add(_accountsItem);
@@ -335,6 +337,13 @@ internal sealed class MainForm : Form
             MessageBox.Show(this, $"建立周期失败:\n{ex.Message}", "账单管理",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>设置窗口:凌晨宽限等全局偏好。</summary>
+    private void OnSettings()
+    {
+        using var dlg = new SettingsDialog(_settings);
+        dlg.ShowDialog(this);
     }
 
     /// <summary>账户管理窗口:列出/新建/停用账户。</summary>
