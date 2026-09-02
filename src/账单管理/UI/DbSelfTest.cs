@@ -217,6 +217,15 @@ internal static class DbSelfTest
             || tx2.PrincipalCents != 80000 || tx2.DeltaCents != -100 || tx2.Kind != "提现")
             throw new Exception("转账就地编辑未生效。");
         steps.Add("就地编辑转账 → 账户/本金/Δ/类别更新");
+
+        // 账户停用后应移出下拉(启用列表);重新启用应恢复
+        Accounts.Disable(s, accountB);
+        if (Accounts.ListEnabled(s).Any(a => a.Id == accountB))
+            throw new Exception("停用账户仍出现在启用列表。");
+        Accounts.Enable(s, accountB);
+        if (!Accounts.ListEnabled(s).Any(a => a.Id == accountB))
+            throw new Exception("重新启用后账户未恢复。");
+        steps.Add("账户停用/启用 → 下拉可见性正确");
     }
 
     private static long? GetPeriodId(LedgerSession s, long txId)
