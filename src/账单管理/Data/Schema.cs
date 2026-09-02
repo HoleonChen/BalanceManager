@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS categories (
 
 CREATE TABLE IF NOT EXISTS transactions (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  period_id       INTEGER REFERENCES periods(id),   -- 由日期自动归属;可空=未归属
+  period_id       INTEGER REFERENCES periods(id),   -- 由日期自动归属,可空=未归属
   date            TEXT NOT NULL,
   account_id      INTEGER NOT NULL REFERENCES accounts(id),
   to_account_id   INTEGER REFERENCES accounts(id),  -- 仅 direction='transfer'
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   channel         TEXT NOT NULL DEFAULT '',         -- 网购/实体/其他(渠道下拉)
   name            TEXT NOT NULL,                    -- 交易名,界面必填
   note            TEXT NOT NULL DEFAULT '',         -- 小类/细节
-  amount_cents    INTEGER NOT NULL,                 -- 非负金额(分);方向由 direction 决定;转账看 principal/delta
+  amount_cents    INTEGER NOT NULL,                 -- 非负金额(分),方向由 direction 决定,转账看 principal/delta
   direction       TEXT NOT NULL CHECK (direction IN ('in', 'out', 'transfer')),
   counterparty    TEXT,
   source          TEXT NOT NULL DEFAULT 'manual',   -- manual/wx/zfb/legacy
