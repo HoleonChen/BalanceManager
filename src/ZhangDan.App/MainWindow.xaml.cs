@@ -24,6 +24,7 @@ public partial class MainWindow
             new CategoriesPage(),
             new SettingsPage()
         };
+        ((DayLedgerPage)_pages[0]).GoTo = NavTo;
 
         _fileBtn.Content = App.Ledger is null ? "＋ 打开账本…" : "✕ 关闭账本";
         ShowStartOrContent();

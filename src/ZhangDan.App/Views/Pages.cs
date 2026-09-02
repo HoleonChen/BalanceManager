@@ -39,11 +39,6 @@ internal static class Placeholder
     }
 }
 
-internal sealed class DayLedgerPage : PageBase
-{
-    public DayLedgerPage() => Content = Placeholder.Build("今日记账", "记一笔/转账/当日流水、日期导航将在 P2 落地。");
-}
-
 internal sealed class FlowPage : PageBase
 {
     public FlowPage() => Content = Placeholder.Build("流水", "周期/自定义范围流水与只读视图将在 P3 落地。");
