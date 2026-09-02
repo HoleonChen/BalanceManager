@@ -17,25 +17,27 @@ internal sealed class PasswordDialog : FormBase
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
-        ClientSize = new Size(400, 150);
+        ClientSize = new Size(400, 136);
 
         var info = new Label
         {
             Text = $"账本「{Path.GetFileName(ledgerPath)}」需要口令:",
-            Location = new Point(16, 16),
+            Location = new Point(16, 14),
             AutoSize = true
         };
 
         _passwordBox = new TextBox
         {
-            Location = new Point(16, 42),
+            Location = new Point(16, 40),
             Width = 368,
             UseSystemPasswordChar = true,
             Font = new Font("Microsoft YaHei UI", 11f)
         };
 
-        var ok = new Button { Text = "确定", DialogResult = DialogResult.OK, Location = new Point(240, 80), Width = 70 };
-        var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Location = new Point(316, 80), Width = 70 };
+        // 按钮贴底,收掉原来 150 高时下方 47px 空档
+        int btnY = ClientSize.Height - 32;
+        var ok = new Button { Text = "确定", DialogResult = DialogResult.OK, Location = new Point(240, btnY), Width = 70 };
+        var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Location = new Point(316, btnY), Width = 70 };
 
         AcceptButton = ok;
         CancelButton = cancel;

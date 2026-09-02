@@ -136,9 +136,11 @@ internal sealed class MainForm : FormBase
         _home = new Panel { Dock = DockStyle.Fill, Visible = false };
 
         // 顶栏:记一笔 | ◀ 日期 ▶ 今天 | 合计
+        // AutoSize:高分屏(150%)下控件被放大后若换行,面板高度随之增高,避免内容被压成细条
         var top = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
+            AutoSize = true,
             Height = 60,
             Padding = new Padding(10, 10, 10, 0)
         };

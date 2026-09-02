@@ -15,7 +15,9 @@
 
     <RootNamespace>ZhangDan</RootNamespace>
     <AssemblyName>账单管理</AssemblyName>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <!-- SystemAware:单显示器高 DPI 下配合 FormBase 的 96 基准按 1.5 精确缩放一次;
+         PerMonitorV2 会叠加框架自动缩放,导致代码直排控件被二次放大(实测按钮过大/顶栏被挤) -->
+    <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
     <Version>0.1.0</Version>
   </PropertyGroup>
 

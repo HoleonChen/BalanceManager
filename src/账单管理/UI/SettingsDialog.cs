@@ -21,7 +21,7 @@ internal sealed class SettingsDialog : FormBase
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
-        ClientSize = new Size(500, 300);
+        ClientSize = new Size(500, 252);
 
         var body = new Panel { Dock = DockStyle.Fill };
         const int xl = 18, xf = 22;
