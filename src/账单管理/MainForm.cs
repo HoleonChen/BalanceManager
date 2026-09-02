@@ -188,6 +188,14 @@ internal sealed class MainForm : Form
         delete.Click += (_, _) => DeleteSelected();
         ctx.Items.Add(delete);
         _todayList.ContextMenuStrip = ctx;
+        _todayList.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Delete)
+            {
+                DeleteSelected();
+                e.Handled = true;
+            }
+        };
         _todayList.DoubleClick += (_, _) => EditSelected();
         _todayList.MouseDown += (_, e) =>
         {
