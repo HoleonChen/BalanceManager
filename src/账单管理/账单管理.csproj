@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- mac 上做跨平台编译检查需要;Windows 上无副作用 -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- 发布目标:自包含 win-x64 -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <RootNamespace>ZhangDan</RootNamespace>
+    <AssemblyName>账单管理</AssemblyName>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SQLCipher 加密 SQLite:Microsoft.Data.Sqlite.Core + 原生 e_sqlcipher 由 NuGet 按 RID 提供 -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.8" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.8" />
+  </ItemGroup>
+
+</Project>

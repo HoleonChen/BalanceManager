@@ -1,0 +1,17 @@
+# ---- 构建产物 ----
+bin/
+obj/
+publish/
+*.user
+.vs/
+
+# ---- 用户数据(不入库)----
+# 账本文件(加密 SQLite,后缀 .lbook)与临时数据库
+*.lbook
+*.db
+*.db-shm
+*.db-wal
+
+# ---- 系统 ----
+.DS_Store
+Thumbs.db
