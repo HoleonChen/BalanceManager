@@ -10,7 +10,8 @@ namespace ZhangDan;
 internal static class Schema
 {
     // v3:资金池落地——每周期至多一个池(单池,fund_pools.period_id 唯一)。
-    public const int CurrentVersion = 3;
+    // v4:分类显式 kind(income/expense)——分类管理(新建/合并/删除)后不再能靠 id 区间 10–14 判收支。
+    public const int CurrentVersion = 4;
 
     // 注意:Microsoft.Data.Sqlite 一条命令只执行首条语句,故统一按 ';' 切分逐条执行。
     private const string Ddl = @"
@@ -160,6 +161,15 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order) VALUES
             // v3:资金池单池约束(每周期至多一个池);新库建表已含,老库补加
             ExecEach(conn,
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_fund_pools_period ON fund_pools(period_id);");
+        }
+
+        if (version < 4)
+        {
+            // v4:分类 kind 显式化。seed 收支靠固定 id(1–9 支出、10–14 收入)回填;
+            // 此后用户自建分类写入 kind,不再依赖 id 区间。
+            ExecEach(conn, "ALTER TABLE categories ADD COLUMN kind TEXT;");
+            ExecEach(conn, "UPDATE categories SET kind = 'expense' WHERE id BETWEEN 1 AND 9;");
+            ExecEach(conn, "UPDATE categories SET kind = 'income'  WHERE id BETWEEN 10 AND 14;");
         }
 
         if (version < CurrentVersion)

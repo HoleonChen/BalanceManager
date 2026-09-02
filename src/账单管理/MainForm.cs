@@ -16,6 +16,7 @@ internal sealed class MainForm : Form
     private ToolStripMenuItem _closeLedgerItem = null!;
     private ToolStripMenuItem _newPeriodItem = null!;
     private ToolStripMenuItem _accountsItem = null!;
+    private ToolStripMenuItem _categoriesItem = null!;
     private ToolStripMenuItem _calibrateItem = null!;
     private ToolStripMenuItem _flowItem = null!;
     private ToolStripMenuItem _poolItem = null!;
@@ -71,6 +72,9 @@ internal sealed class MainForm : Form
         _accountsItem = MakeItem("账户管理…", null, (_, _) => OnManageAccounts());
         _accountsItem.Enabled = false;
         tools.DropDownItems.Add(_accountsItem);
+        _categoriesItem = MakeItem("分类管理…", null, (_, _) => OnManageCategories());
+        _categoriesItem.Enabled = false;
+        tools.DropDownItems.Add(_categoriesItem);
         _calibrateItem = MakeItem("校准余额…", null, (_, _) => OnCalibrate());
         _calibrateItem.Enabled = false;
         tools.DropDownItems.Add(_calibrateItem);
@@ -328,6 +332,7 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = false;
         _newPeriodItem.Enabled = false;
         _accountsItem.Enabled = false;
+        _categoriesItem.Enabled = false;
         _calibrateItem.Enabled = false;
         _flowItem.Enabled = false;
         _poolItem.Enabled = false;
@@ -345,6 +350,7 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = true;
         _newPeriodItem.Enabled = true;
         _accountsItem.Enabled = true;
+        _categoriesItem.Enabled = true;
         _calibrateItem.Enabled = true;
         _flowItem.Enabled = true;
         _poolItem.Enabled = true;
@@ -438,6 +444,15 @@ internal sealed class MainForm : Form
         if (_ledger is null)
             return;
         using var dlg = new AccountListDialog(_ledger);
+        dlg.ShowDialog(this);
+    }
+
+    /// <summary>分类管理:新建/重命名/改色/关键词/排序/合并/删除。</summary>
+    private void OnManageCategories()
+    {
+        if (_ledger is null)
+            return;
+        using var dlg = new CategoryManageDialog(_ledger);
         dlg.ShowDialog(this);
     }
 

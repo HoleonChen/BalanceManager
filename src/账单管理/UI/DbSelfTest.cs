@@ -238,6 +238,9 @@ internal static class DbSelfTest
 
         // 账户派生视图:账面=基准+净变动;收支转构成拆分;净资产合计(停用不计)
         AccountViewFlow(s, steps);
+
+        // 分类管理:收支隔离 / 改名改色关键词 / 排序上移 / 合并改挂 / 删除先清交易
+        CategoryFlow(s, steps);
     }
 
     /// <summary>校准余额断言:账面派生 / 记调整流水 / 仅改基准 / 补记明细(仅审计) / 审计历史。</summary>
@@ -538,6 +541,104 @@ WHERE account_id = $a AND name = '差额调整' AND direction = 'out'
         if (Accounts.NetAssets(s) != before + 12345)
             throw new Exception("重新启用后净资产未恢复计入。");
         steps.Add("净资产:启用计入、停用不计、再启用恢复");
+    }
+
+    /// <summary>
+    /// 分类管理断言:收支隔离 / 改名改色关键词 / 引用计数 / 排序上移;
+    /// 合并 → 流水改挂、原分类删除;删除须先清交易(未用可删、用中被拦、合并后删)。
+    /// </summary>
+    private static void CategoryFlow(LedgerSession s, List<string> steps)
+    {
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var catAcct = Accounts.Insert(s, "分类账户", "wallet", "微信", 0);
+
+        var x = Categories.Insert(s, "临时支出", income: false, "#F0F0F0", "盒饭 外卖");
+        var y = Categories.Insert(s, "临时收入", income: true, null, null);
+        var expense = Categories.ListManual(s, income: false);
+        var incomeList = Categories.ListManual(s, income: true);
+        if (expense.Any(c => c.Id == y) || !expense.Any(c => c.Id == x) || !incomeList.Any(c => c.Id == y))
+            throw new Exception("新建分类收支隔离不符(收入类进收入列表,支出类进支出列表)。");
+
+        Categories.Rename(s, x, "改名支出");
+        Categories.SetColor(s, x, "#112233");
+        Categories.SetKeyword(s, x, "外卖 盒饭");
+        var xr = Categories.ListManual(s, false).First(c => c.Id == x);
+        if (xr.Name != "改名支出" || xr.Color != "#112233")
+            throw new Exception("分类改名/改色未生效。");
+        if (Categories.UsedCount(s, x) != 0)
+            throw new Exception("新分类引用计数应为 0。");
+
+        var tx = Transactions.Add(s, new TxnDraft
+        {
+            Date = today, Direction = "out", AccountId = catAcct, CategoryId = x,
+            AmountCents = 900, Name = "分类测", Note = "", Channel = "", InPool = false
+        });
+        if (Categories.UsedCount(s, x) != 1)
+            throw new Exception("记一笔后分类引用计数应 +1。");
+
+        // 上移一位:应排到「其他」(id 8)前面
+        Categories.Move(s, x, up: true);
+        var after = Categories.ListManual(s, false);
+        int xi = IndexOfId(after, x);
+        int oi = IndexOfId(after, 8);
+        if (xi < 0 || xi > oi)
+            throw new Exception("分类上移未改变叠放序(应到「其他」之前)。");
+        steps.Add("分类:收支隔离/改名改色关键词/引用计数/排序上移");
+
+        // 合并到「餐饮」(1):流水改挂、原分类删除
+        Categories.Merge(s, x, 1);
+        if (Categories.ListManual(s, false).Any(c => c.Id == x) || GetCategoryId(s, tx) != 1)
+            throw new Exception("合并后原分类未删 / 流水未改挂。");
+        steps.Add("分类:合并 → 流水改挂、原分类删除");
+
+        // 未使用分类可删
+        var z = Categories.Insert(s, "待删", income: false, "#010101", null);
+        Categories.Delete(s, z);
+        if (Categories.ListManual(s, false).Any(c => c.Id == z))
+            throw new Exception("未使用分类删除未生效。");
+        steps.Add("分类:未使用删除成功");
+
+        // 使用中删除被拦;合并清空后再删可成
+        var z2 = Categories.Insert(s, "用过再删", income: false, "#020202", null);
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = today, Direction = "out", AccountId = catAcct, CategoryId = z2,
+            AmountCents = 500, Name = "待删测", Note = "", Channel = "", InPool = false
+        });
+        bool blocked = false;
+        try
+        {
+            Categories.Delete(s, z2);
+        }
+        catch (InvalidOperationException)
+        {
+            blocked = true;
+        }
+        if (!blocked)
+            throw new Exception("有流水的分类删除应被拦截。");
+        Categories.Merge(s, z2, 1);
+        Categories.Delete(s, z2);
+        if (Categories.ListManual(s, false).Any(c => c.Id == z2))
+            throw new Exception("清空流水后删除未生效。");
+        steps.Add("分类:使用中删除被拦 → 合并清空后可删");
+    }
+
+    private static int IndexOfId(IReadOnlyList<CategoryRow> rows, long id)
+    {
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Id == id)
+                return i;
+        }
+        return -1;
+    }
+
+    private static long? GetCategoryId(LedgerSession s, long txId)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "SELECT category_id FROM transactions WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", txId);
+        return cmd.ExecuteScalar() as long?;
     }
 
     /// <summary>写操作应被只读保护拦截(LedgerReadonlyException);未拦截即断言失败。</summary>
