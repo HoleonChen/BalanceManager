@@ -26,6 +26,8 @@ internal sealed class AccountsPage : PageBase
     {
         var create = new Button { Content = "＋ 新建账户…", MinWidth = 128, Height = 34 };
         create.Click += (_, _) => CreateAccount();
+        var edit = new Button { Content = "编辑…", MinWidth = 76, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
+        edit.Click += (_, _) => EditSelected();
         var disable = new Button { Content = "停用所选", MinWidth = 92, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
         disable.Click += (_, _) => Toggle(false);
         var enable = new Button { Content = "启用所选", MinWidth = 92, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
@@ -33,9 +35,19 @@ internal sealed class AccountsPage : PageBase
 
         var top = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 16, 20, 10) };
         top.Children.Add(create);
+        top.Children.Add(edit);
         top.Children.Add(disable);
         top.Children.Add(enable);
         top.Children.Add(_summary);
+
+        var menu = new ContextMenu();
+        var mEdit = new MenuItem { Header = "编辑账户…" }; mEdit.Click += (_, _) => EditSelected();
+        var mDisable = new MenuItem { Header = "停用" }; mDisable.Click += (_, _) => Toggle(false);
+        var mEnable = new MenuItem { Header = "启用" }; mEnable.Click += (_, _) => Toggle(true);
+        menu.Items.Add(mEdit);
+        menu.Items.Add(mDisable);
+        menu.Items.Add(mEnable);
+        _list.ContextMenu = menu;
 
         var gv = new GridView();
         gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 200, DisplayMemberBinding = Bind("Name") });
@@ -91,7 +103,7 @@ internal sealed class AccountsPage : PageBase
 
     private void CreateAccount()
     {
-        var dlg = new AccountCreateDialog { Owner = Window.GetWindow(this) };
+        var dlg = new AccountCreateDialog(existing: null) { Owner = Window.GetWindow(this) };
         if (dlg.ShowDialog() != true)
             return;
         try
@@ -102,6 +114,25 @@ internal sealed class AccountsPage : PageBase
         catch (Exception ex)
         {
             MessageBox.Show($"新建账户失败:\n{ex.Message}", "账户", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void EditSelected()
+    {
+        var r = Selected();
+        if (r is null)
+            return;
+        var dlg = new AccountCreateDialog(existing: r.A) { Owner = Window.GetWindow(this) };
+        if (dlg.ShowDialog() != true)
+            return;
+        try
+        {
+            Accounts.UpdateInfo(S, r.A.Id, dlg.AccountName, dlg.TypeKey, dlg.Platform);
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"保存失败:\n{ex.Message}", "账户", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -140,9 +171,9 @@ internal sealed class AccountCreateDialog : Window
     public string Platform => _platform.Text.Trim();
     public long BalanceCents { get; private set; }
 
-    public AccountCreateDialog()
+    public AccountCreateDialog(AccountRow? existing = null)
     {
-        Title = "新建账户";
+        Title = existing is null ? "新建账户" : "编辑账户";
         Width = 480;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -155,7 +186,21 @@ internal sealed class AccountCreateDialog : Window
             _platform.Items.Add(p);
         _platform.SelectedIndex = 0;
 
-        var ok = new Button { Content = "创建", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        if (existing is not null)
+        {
+            _name.Text = existing.Name;
+            _platform.Text = existing.Platform;
+            for (int i = 0; i < Types.Length; i++)
+            {
+                if (Types[i].Key == existing.Type)
+                {
+                    _type.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+
+        var ok = new Button { Content = existing is null ? "创建" : "保存", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Accept();
         var cancel = new Button { Content = "取消", Width = 96, Height = 34, IsCancel = true };
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
@@ -166,7 +211,8 @@ internal sealed class AccountCreateDialog : Window
         panel.Children.Add(Row("名称", _name));
         panel.Children.Add(Row("类型", _type));
         panel.Children.Add(Row("平台", _platform));
-        panel.Children.Add(Row("当前余额(可选,元)", _balance));
+        if (existing is null)
+            panel.Children.Add(Row("当前余额(可选,元)", _balance));   // 余额只走「校准」,编辑时不显示
         panel.Children.Add(_error);
         panel.Children.Add(row);
         Content = panel;

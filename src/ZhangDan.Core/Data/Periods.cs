@@ -139,6 +139,34 @@ ORDER BY start_date DESC, id DESC;";
         return list;
     }
 
+    /// <summary>改周期属性(名称/起止)。已封存周期只读不可改;新范围不得与其他周期重叠。</summary>
+    public static void Update(LedgerSession s, long id, string name, string startDate, string? endDate)
+    {
+        using var chk = s.Connection.CreateCommand();
+        chk.CommandText = "SELECT status FROM periods WHERE id = $id;";
+        chk.Parameters.AddWithValue("$id", id);
+        if (chk.ExecuteScalar() as string == "sealed")
+            throw new InvalidOperationException("已封存周期只读,不能修改。请先解除封存。");
+
+        // 排除自身后检查重叠
+        chk.CommandText = @"
+SELECT COUNT(*) FROM periods
+WHERE id <> $id AND start_date <= $newEnd
+  AND (end_date IS NULL OR end_date >= $newStart);";
+        chk.Parameters.AddWithValue("$newStart", startDate);
+        chk.Parameters.AddWithValue("$newEnd", endDate ?? "9999-12-31");
+        if (Convert.ToInt64(chk.ExecuteScalar()) > 0)
+            throw new InvalidOperationException("修改后的周期与其他周期日期重叠。");
+
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE periods SET name = $name, start_date = $start, end_date = $end WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$name", name);
+        cmd.Parameters.AddWithValue("$start", startDate);
+        cmd.Parameters.AddWithValue("$end", (object?)endDate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>封存一个进行中周期(status → 'sealed',只读)。已封存则 no-op。</summary>
     public static void Seal(LedgerSession s, long id)
     {

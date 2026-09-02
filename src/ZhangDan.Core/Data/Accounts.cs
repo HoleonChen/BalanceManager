@@ -138,6 +138,18 @@ ORDER BY sort_order, id;";
         return list;
     }
 
+    /// <summary>改账户属性(名称/类型/平台)。余额走「校准」,不经这里。</summary>
+    public static void UpdateInfo(LedgerSession s, long id, string name, string type, string platform)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE accounts SET name = $name, type = $type, platform = $platform WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$name", name);
+        cmd.Parameters.AddWithValue("$type", type);
+        cmd.Parameters.AddWithValue("$platform", platform);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>停用账户(不再出现在记账/转账下拉;有流水约束,不物理删除)。</summary>
     public static void Disable(LedgerSession s, long id)
     {

@@ -30,6 +30,8 @@ internal sealed class PeriodsPage : PageBase
     {
         var create = new Button { Content = "＋ 新建周期…", MinWidth = 128, Height = 34 };
         create.Click += (_, _) => Create();
+        var edit = new Button { Content = "编辑…", MinWidth = 76, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
+        edit.Click += (_, _) => EditSelected();
         var seal = new Button { Content = "封存所选", MinWidth = 92, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
         seal.Click += (_, _) => Seal();
         var unseal = new Button { Content = "解除封存", MinWidth = 92, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
@@ -37,8 +39,18 @@ internal sealed class PeriodsPage : PageBase
 
         var top = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 16, 20, 10) };
         top.Children.Add(create);
+        top.Children.Add(edit);
         top.Children.Add(seal);
         top.Children.Add(unseal);
+
+        var menu = new ContextMenu();
+        var mEdit = new MenuItem { Header = "编辑周期…" }; mEdit.Click += (_, _) => EditSelected();
+        var mSeal = new MenuItem { Header = "封存" }; mSeal.Click += (_, _) => Seal();
+        var mUnseal = new MenuItem { Header = "解除封存" }; mUnseal.Click += (_, _) => Unseal();
+        menu.Items.Add(mEdit);
+        menu.Items.Add(mSeal);
+        menu.Items.Add(mUnseal);
+        _list.ContextMenu = menu;
 
         var gv = new GridView();
         gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 180, DisplayMemberBinding = Bind("Name") });
@@ -74,7 +86,7 @@ internal sealed class PeriodsPage : PageBase
 
     private void Create()
     {
-        var dlg = new PeriodCreateDialog { Owner = Window.GetWindow(this) };
+        var dlg = new PeriodCreateDialog(existing: null) { Owner = Window.GetWindow(this) };
         if (dlg.ShowDialog() != true)
             return;
         try
@@ -85,6 +97,30 @@ internal sealed class PeriodsPage : PageBase
         catch (Exception ex)
         {
             MessageBox.Show($"建立周期失败:\n{ex.Message}", "周期", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void EditSelected()
+    {
+        var r = Selected();
+        if (r is null)
+            return;
+        if (r.P.Status == "sealed")
+        {
+            MessageBox.Show("已封存周期只读,请先解除封存再编辑。", "周期", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var dlg = new PeriodCreateDialog(r.P) { Owner = Window.GetWindow(this) };
+        if (dlg.ShowDialog() != true)
+            return;
+        try
+        {
+            Periods.Update(S, r.P.Id, dlg.PeriodName, dlg.StartDate, dlg.EndDate);
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"保存失败:\n{ex.Message}", "周期", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -129,15 +165,28 @@ internal sealed class PeriodCreateDialog : Window
     public string StartDate => _start.SelectedDate!.Value.ToString("yyyy-MM-dd");
     public string? EndDate => _endCheck.IsChecked == true ? _end.SelectedDate?.ToString("yyyy-MM-dd") : null;
 
-    public PeriodCreateDialog()
+    public PeriodCreateDialog(PeriodRow? existing = null)
     {
-        Title = "新建记账周期";
+        Title = existing is null ? "新建记账周期" : "编辑周期";
         Width = 480;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         _endCheck.Checked += (_, _) => _end.IsEnabled = true;
         _endCheck.Unchecked += (_, _) => _end.IsEnabled = false;
+
+        if (existing is not null)
+        {
+            _name.Text = existing.Name;
+            _start.SelectedDate = DateTime.Parse(existing.StartDate);
+            if (existing.EndDate is not null)
+                _end.SelectedDate = DateTime.Parse(existing.EndDate);
+            else
+            {
+                _endCheck.IsChecked = false;
+                _end.IsEnabled = false;
+            }
+        }
 
         var endRow = new DockPanel();
         DockPanel.SetDock(_endCheck, Dock.Left);
