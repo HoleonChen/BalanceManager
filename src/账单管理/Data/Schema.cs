@@ -9,7 +9,7 @@ namespace ZhangDan;
 /// </summary>
 internal static class Schema
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 1;
 
     // 注意:Microsoft.Data.Sqlite 一条命令只执行首条语句,故统一按 ';' 切分逐条执行。
     private const string Ddl = @"
@@ -129,22 +129,8 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order) VALUES
   (14, NULL, '其他',    NULL, 4);
 ";
 
-    // 默认账户(对应设计文档 §3.2 账户清单),id 固定,便于记账下拉排序。
-    private const string AccountSeed = @"
-INSERT OR IGNORE INTO accounts (id, name, platform, type, enabled, balance_base_cents, sort_order) VALUES
-  (1, '微信零钱',   '微信',   'wallet',        1, 0, 0),
-  (2, '零钱通',     '微信',   'money_fund',    1, 0, 1),
-  (3, '支付宝余额', '支付宝', 'wallet',        1, 0, 2),
-  (4, '余额宝',     '支付宝', 'money_fund',    1, 0, 3),
-  (5, '建行储蓄卡', '银行',   'bank',          1, 0, 4),
-  (6, '整存整取',   '投资',   'fixed_deposit', 1, 0, 5),
-  (7, '基金',       '投资',   'fund',          1, 0, 6),
-  (8, '现金',       '现金',   'cash',          1, 0, 7),
-  (9, '水卡',       '储值卡', 'prepaid',       1, 0, 8);
-";
-
     /// <summary>
-    /// 建表/种子/写账本名(新库 v0);老库按版本号增量补种子(如 v1 只补账户),不重复建表。
+    /// 建表/写账本名(仅新库 v0)。预设分类含收支类;账户表保持空,由用户/导入自行创建。
     /// </summary>
     public static void Ensure(SqliteConnection conn, string ledgerName)
     {
@@ -153,13 +139,10 @@ INSERT OR IGNORE INTO accounts (id, name, platform, type, enabled, balance_base_
         if (version < 1)
         {
             ExecEach(conn, Ddl);
-            ExecEach(conn, Seed);           // 预设分类
+            ExecEach(conn, Seed);           // 预设分类(收支)
             SetMeta(conn, "ledger.name", ledgerName);
             SetMeta(conn, "created_at", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
         }
-
-        if (version < 2)
-            ExecEach(conn, AccountSeed);    // 默认账户
 
         if (version < CurrentVersion)
             SetUserVersion(conn, CurrentVersion);
