@@ -19,7 +19,9 @@ internal sealed class MainForm : Form
     private Panel _home = null!;
     private Label _hintLabel = null!;
     private Label _summaryLabel = null!;
+    private Label _dateLabel = null!;
     private ListView _todayList = null!;
+    private DateTime _viewDate;
 
     public MainForm()
     {
@@ -84,35 +86,54 @@ internal sealed class MainForm : Form
         _hintLabel.BringToFront();
     }
 
-    /// <summary>打开账本后的主区:今日流水(记一笔 + 合计 + 列表)。周期总览后续替换/扩展。</summary>
+    /// <summary>打开账本后的主区:单日流水(记一笔 + 日期导航 + 合计 + 列表)。周期总览后续替换/扩展。</summary>
     private void BuildHome()
     {
         _home = new Panel { Dock = DockStyle.Fill, Visible = false };
 
-        var top = new TableLayoutPanel
+        // 顶栏:记一笔 | ◀ 日期 ▶ 今天 | 合计
+        var top = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 56,
-            ColumnCount = 3,
-            Padding = new Padding(10, 10, 10, 0)
+            Height = 52,
+            Padding = new Padding(10, 8, 10, 0)
         };
-        var record = new Button { Text = "＋ 记一笔", Width = 120, Height = 34, Font = new Font("Microsoft YaHei UI", 11f) };
-        record.Click += (_, _) => OnRecordOne();
-        _summaryLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(10, 0, 0, 0) };
-        var title = new Label
+
+        var record = new Button
         {
-            Text = "今日流水",
+            Text = "＋ 记一笔",
+            Width = 118,
+            Height = 32,
+            Font = new Font("Microsoft YaHei UI", 11f),
+            Margin = new Padding(0, 0, 14, 0)
+        };
+        record.Click += (_, _) => OnRecordOne();
+
+        var prev = new Button { Text = "◀", Width = 34, Height = 30 };
+        prev.Click += (_, _) => { _viewDate = _viewDate.AddDays(-1); RefreshView(); };
+
+        _dateLabel = new Label
+        {
+            AutoSize = true,
+            Font = new Font("Microsoft YaHei UI", 12f),
+            TextAlign = ContentAlignment.MiddleCenter,
+            Margin = new Padding(6, 5, 6, 0)
+        };
+
+        var next = new Button { Text = "▶", Width = 34, Height = 30 };
+        next.Click += (_, _) => { _viewDate = _viewDate.AddDays(1); RefreshView(); };
+
+        var today = new Button { Text = "今天", Width = 56, Height = 30, Margin = new Padding(8, 0, 18, 0) };
+        today.Click += (_, _) => { _viewDate = DateTime.Today; RefreshView(); };
+
+        _summaryLabel = new Label
+        {
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
-            Anchor = AnchorStyles.Right,
-            Font = new Font("Microsoft YaHei UI", 11f)
+            Margin = new Padding(0, 8, 0, 0)
         };
-        top.Controls.Add(record, 0, 0);
-        top.Controls.Add(_summaryLabel, 1, 0);
-        top.Controls.Add(title, 2, 0);
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+
+        top.Controls.AddRange(new Control[] { record, prev, _dateLabel, next, today, _summaryLabel });
 
         _todayList = new ListView
         {
@@ -234,9 +255,10 @@ internal sealed class MainForm : Form
 
     private void ShowHome()
     {
+        _viewDate = DateTime.Today;
         _home.Visible = true;
         _hintLabel.Visible = false;
-        RefreshToday();
+        RefreshView();
     }
 
     private void HideHome()
@@ -268,7 +290,11 @@ internal sealed class MainForm : Form
                 Channel = dlg.Channel,
                 InPool = dlg.InPool
             });
-            RefreshToday();
+
+            // 视图跳到该笔所在日期(例如凌晨宽限记到昨天,补录后立刻可见)
+            var p = dlg.DateStr.Split('-');
+            _viewDate = new DateTime(int.Parse(p[0]), int.Parse(p[1]), int.Parse(p[2]));
+            RefreshView();
         }
         catch (Exception ex)
         {
@@ -277,14 +303,25 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void RefreshToday()
+    /// <summary>刷新当前查看日期(_viewDate)的日期标注 + 流水列表 + 合计。</summary>
+    private void RefreshView()
     {
         if (_ledger is null)
             return;
 
-        var today = DateTime.Now.ToString("yyyy-MM-dd");
-        var items = Transactions.ListByDate(_ledger, today);
-        var (outCents, inCents) = Transactions.DayTotals(_ledger, today);
+        var day = _viewDate.Date;
+        var dateStr = day.ToString("yyyy-MM-dd");
+        var diff = (day - DateTime.Today).Days;
+        _dateLabel.Text = diff switch
+        {
+            0 => dateStr + " · 今天",
+            1 => dateStr + " · 明天",
+            -1 => dateStr + " · 昨天",
+            _ => dateStr
+        };
+
+        var items = Transactions.ListByDate(_ledger, dateStr);
+        var (outCents, inCents) = Transactions.DayTotals(_ledger, dateStr);
 
         _todayList.BeginUpdate();
         _todayList.Items.Clear();
@@ -304,7 +341,7 @@ internal sealed class MainForm : Form
         _todayList.EndUpdate();
 
         _summaryLabel.Text =
-            $"今日支出 {Money.Yuan(outCents)} · 今日收入 {Money.Yuan(inCents)} · {items.Count} 笔";
+            $"支出 {Money.Yuan(outCents)} · 收入 {Money.Yuan(inCents)} · {items.Count} 笔";
     }
 
     private void Remember(string path)
