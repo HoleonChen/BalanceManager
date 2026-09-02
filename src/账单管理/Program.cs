@@ -15,7 +15,8 @@ internal static class Program
         // 全应用默认字体:微软雅黑(中文)
         Application.SetDefaultFont(new Font("Microsoft YaHei UI", 9f));
 
-        // TODO(数据层 commit):LedgerStore.Init() —— SQLCipher 原生库初始化
+        // SQLCipher 原生库初始化(打开/新建账本前必须调用一次)
+        LedgerStore.Init();
 
         Application.Run(new MainForm());
     }
