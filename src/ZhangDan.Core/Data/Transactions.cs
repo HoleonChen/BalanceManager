@@ -79,6 +79,8 @@ internal static class Transactions
     public static long Add(LedgerSession s, TxnDraft t)
     {
         Periods.ThrowIfSealed(s, t.Date);   // 封存周期内的日期只读
+        if (t.Direction == "out")
+            ThrowIfOverdraft(s, t.AccountId, t.AmountCents);   // 非负债账户余额不可为负
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO transactions
@@ -110,6 +112,7 @@ VALUES
     public static long Transfer(LedgerSession s, TransferDraft t)
     {
         Periods.ThrowIfSealed(s, t.Date);   // 封存周期内的日期只读
+        ThrowIfOverdraft(s, t.FromAccountId, t.PrincipalCents);   // 非负债账户不可透支转出
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO transactions
@@ -463,6 +466,28 @@ ORDER BY t.date, t.id;";
                 r.IsDBNull(16) ? string.Empty : r.GetString(16)));
         }
         return list;
+    }
+
+    /// <summary>非负债账户不允许余额为负(零钱/银行/现金…);负债型(信用卡等)以后放开。</summary>
+    private static void ThrowIfOverdraft(LedgerSession s, long accountId, long spendCents)
+    {
+        if (IsLiabilityType(s, accountId))
+            return;
+        var book = AccountCalibration.BookCents(s, accountId);
+        if (book - spendCents < 0)
+        {
+            throw new InvalidOperationException(
+                $"余额不足:该账户当前余额 {Money.Yuan(book)},不足以支出 {Money.Yuan(spendCents)}。");
+        }
+    }
+
+    private static bool IsLiabilityType(LedgerSession s, long accountId)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "SELECT type FROM accounts WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", accountId);
+        var type = cmd.ExecuteScalar() as string;
+        return type is "credit_card";   // 负债型账户才允许负余额(类型暂未开放)
     }
 
     /// <summary>取一笔的日期(写保护/回填用);不存在返回 null。</summary>

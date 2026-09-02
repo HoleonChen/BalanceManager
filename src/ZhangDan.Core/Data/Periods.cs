@@ -15,9 +15,13 @@ internal sealed record PeriodRow(
 /// <summary>周期写读:新建(active)、按日期找覆盖周期。</summary>
 internal static class Periods
 {
-    /// <summary>新建进行中周期(status='active');end 为空 = 不设结束日期。</summary>
+    /// <summary>新建进行中周期(status='active');end 为空 = 不设结束日期。
+    /// 周期不允许日期重叠(与任何既有周期重叠都拒绝),避免封存/归属冲突。</summary>
     public static long Insert(LedgerSession s, string name, string startDate, string? endDate)
     {
+        if (HasOverlap(s, startDate, endDate))
+            throw new InvalidOperationException(
+                "新周期与已有周期日期重叠。请先结束/封存既有周期,或调整起止日期。");
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO periods (name, start_date, end_date, status)
@@ -44,6 +48,18 @@ VALUES ($name, $start, $end, 'active');";
         cmd.ExecuteNonQuery();
 
         return id;
+    }
+
+    /// <summary>新区间(任一 end 为 null = 长期)是否与任何既有周期重叠。</summary>
+    private static bool HasOverlap(LedgerSession s, string startDate, string? endDate)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT COUNT(*) FROM periods
+WHERE start_date <= $newEnd AND (end_date IS NULL OR end_date >= $newStart);";
+        cmd.Parameters.AddWithValue("$newStart", startDate);
+        cmd.Parameters.AddWithValue("$newEnd", endDate ?? "9999-12-31");
+        return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
     }
 
     /// <summary>列出进行中周期,按开始日倒序。</summary>

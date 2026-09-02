@@ -97,8 +97,8 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
     /// <summary>流水/周期/作废 数据流断言;任何不符即抛错。</summary>
     private static void DataFlow(LedgerSession s, List<string> steps)
     {
-        var accountA = Accounts.Insert(s, "微信零钱", "wallet", "微信", 0);
-        var accountB = Accounts.Insert(s, "银行卡", "bank", "银行", 0);
+        var accountA = Accounts.Insert(s, "微信零钱", "wallet", "微信", 10_000_000);
+        var accountB = Accounts.Insert(s, "银行卡", "bank", "银行", 10_000_000);
 
         var today = DateTime.Today;
         var date = today.ToString("yyyy-MM-dd");
@@ -426,8 +426,8 @@ WHERE account_id = $a AND name = '差额调整' AND direction = 'out'
     private static void PeriodLifecycleFlow(LedgerSession s, List<string> steps)
     {
         var today = DateTime.Today.ToString("yyyy-MM-dd");
-        var a = Accounts.Insert(s, "封测A", "bank", "银行", 0);
-        var b = Accounts.Insert(s, "封测B", "wallet", "微信", 0);
+        var a = Accounts.Insert(s, "封测A", "bank", "银行", 1_000_000);
+        var b = Accounts.Insert(s, "封测B", "wallet", "微信", 1_000_000);
 
         // ① 未来窗口建周期并记账 → 自动归属
         var d0 = DateTime.Today.AddDays(41).ToString("yyyy-MM-dd");
@@ -490,13 +490,21 @@ WHERE account_id = $a AND name = '差额调整' AND direction = 'out'
         Transactions.Cancel(s, okId);   // 能写能作废 = 已恢复
         steps.Add("生命周期:解除封存 → 恢复可写(记/作废均可)");
 
-        // ④ 新周期不得把封存期游离账改挂(补归属的 notSealed 守卫)
+        // ④ 周期不允许重叠(与封存期重叠也要拒);封存期游离账不因新建被改挂
         Periods.Seal(s, pId);   // 再封存,模拟已冻结窗口
         var legacy = InsertLegacyUnassigned(s, d1, a);
-        var qId = Periods.Insert(s, "重叠新期", d0, d2);
-        if (Periods.Get(s, qId) is null || GetPeriodId(s, legacy) is not null)
-            throw new Exception("新周期补归属把封存期游离账改挂了(应保持未归属)。");
-        steps.Add("生命周期:新周期不改挂封存期游离账");
+        bool overlapBlocked = false;
+        try
+        {
+            Periods.Insert(s, "重叠新期", d0, d2);
+        }
+        catch (InvalidOperationException)
+        {
+            overlapBlocked = true;
+        }
+        if (!overlapBlocked || GetPeriodId(s, legacy) is not null)
+            throw new Exception("重叠周期未被拦截 / 封存期游离账被改挂。");
+        steps.Add("生命周期:重叠周期被拒,封存期游离账不改挂");
 
         // ⑤ 到期推荐:已到期未封存周期可被查出,封存后不再推荐
         var oldStart = DateTime.Today.AddDays(-40).ToString("yyyy-MM-dd");
@@ -574,7 +582,7 @@ WHERE account_id = $a AND name = '差额调整' AND direction = 'out'
     private static void CategoryFlow(LedgerSession s, List<string> steps)
     {
         var today = DateTime.Today.ToString("yyyy-MM-dd");
-        var catAcct = Accounts.Insert(s, "分类账户", "wallet", "微信", 0);
+        var catAcct = Accounts.Insert(s, "分类账户", "wallet", "微信", 1_000_000);
 
         var x = Categories.Insert(s, "临时支出", income: false, "#F0F0F0", "盒饭 外卖");
         var y = Categories.Insert(s, "临时收入", income: true, null, null);

@@ -28,6 +28,7 @@ internal sealed class CreateLedgerDialog : Window
         ResizeMode = ResizeMode.NoResize;
 
         _pathBox = new TextBox { Text = Path.Combine(AppPaths.UserDataDir, "我的账本.lbook") };
+        _nameBox.TextChanged += (_, _) => SyncNameToPath();
 
         var browse = new Button { Content = "浏览…", Width = 88, Height = 34, Margin = new Thickness(8, 0, 0, 0) };
         browse.Click += (_, _) => PickPath();
@@ -51,7 +52,7 @@ internal sealed class CreateLedgerDialog : Window
 
         var panel = new StackPanel { Margin = new Thickness(20) };
         panel.Children.Add(Field("账本名称", _nameBox));
-        panel.Children.Add(Field("保存为", pathRow));
+        panel.Children.Add(Field("保存为(文件名自动随账本名)", pathRow));
         panel.Children.Add(Field("口令(至少 6 位)", _passwordBox));
         panel.Children.Add(Field("确认口令", _confirmBox));
 
@@ -78,6 +79,19 @@ internal sealed class CreateLedgerDialog : Window
         return panel;
     }
 
+    /// <summary>账本名变化时,把「保存为」里的文件名同步成新账本名(保留所在目录)。</summary>
+    private void SyncNameToPath()
+    {
+        var p = _pathBox.Text.Trim();
+        if (p.Length == 0)
+            return;
+        var name = LedgerName.Length == 0 ? "账本" : LedgerName;
+        var dir = Path.GetDirectoryName(p);
+        _pathBox.Text = string.IsNullOrEmpty(dir)
+            ? name + ".lbook"
+            : Path.Combine(dir, name + ".lbook");
+    }
+
     private void PickPath()
     {
         var dlg = new Microsoft.Win32.SaveFileDialog
@@ -85,8 +99,10 @@ internal sealed class CreateLedgerDialog : Window
             Title = "保存账本到…",
             Filter = "账本文件 (*.lbook)|*.lbook",
             DefaultExt = "lbook",
-            FileName = _nameBox.Text.Trim() + ".lbook",
-            InitialDirectory = AppPaths.UserDataDir,
+            FileName = LedgerName.Length == 0 ? "账本.lbook" : LedgerName + ".lbook",
+            InitialDirectory = Path.GetDirectoryName(_pathBox.Text.Trim()) is { Length: > 0 } d && Directory.Exists(d)
+                ? d
+                : AppPaths.UserDataDir,
             OverwritePrompt = true
         };
         if (dlg.ShowDialog(this) == true)
@@ -117,9 +133,10 @@ internal sealed class CreateLedgerDialog : Window
             var p = _pathBox.Text.Trim();
             if (p.Length == 0)
                 throw new FormatException("路径为空。");
-            if (!Path.HasExtension(p))
-                p += ".lbook";
-            full = Path.GetFullPath(p);
+            // 保存为 = 单纯文件夹;文件名始终取「账本名.lbook」,避免名称与路径不同步
+            full = Path.HasExtension(p)
+                ? Path.GetFullPath(p)                       // 用户若手动给了完整文件名则尊重
+                : Path.Combine(Path.GetFullPath(p), LedgerName + ".lbook");
         }
         catch (Exception ex)
         {
