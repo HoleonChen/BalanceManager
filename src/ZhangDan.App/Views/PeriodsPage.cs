@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ZhangDan.App.Dialogs;
 
 namespace ZhangDan.App.Views;
 
@@ -86,12 +87,32 @@ internal sealed class PeriodsPage : PageBase
 
     private void Create()
     {
-        var dlg = new PeriodCreateDialog(existing: null) { Owner = Window.GetWindow(this) };
+        var dlg = new PeriodCreateDialog(S, existing: null) { Owner = Window.GetWindow(this) };
         if (dlg.ShowDialog() != true)
             return;
         try
         {
-            Periods.Insert(S, dlg.PeriodName, dlg.StartDate, dlg.EndDate);
+            var pid = Periods.Insert(S, dlg.PeriodName, dlg.StartDate, dlg.EndDate);
+
+            if (dlg.UseInitialIncome)
+            {
+                Transactions.Add(S, new TxnDraft
+                {
+                    Date = dlg.StartDate,
+                    Direction = "in",
+                    AccountId = dlg.IncomeAccountId,
+                    CategoryId = dlg.IncomeCategoryId,
+                    AmountCents = dlg.IncomeCents,
+                    Name = "初始收入",
+                    Note = "",
+                    Channel = "",
+                    InPool = false
+                });
+            }
+
+            if (dlg.UsePool)
+                Pools.Save(S, pid, "生活费", dlg.PoolAccountId, dlg.PoolBudgetCents, dlg.PoolReserveCents);
+
             Reload();
         }
         catch (Exception ex)
@@ -110,7 +131,7 @@ internal sealed class PeriodsPage : PageBase
             MessageBox.Show("已封存周期只读,请先解除封存再编辑。", "周期", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        var dlg = new PeriodCreateDialog(r.P) { Owner = Window.GetWindow(this) };
+        var dlg = new PeriodCreateDialog(S, r.P) { Owner = Window.GetWindow(this) };
         if (dlg.ShowDialog() != true)
             return;
         try
@@ -149,93 +170,5 @@ internal sealed class PeriodsPage : PageBase
             return;
         Periods.Unseal(S, r.P.Id);
         Reload();
-    }
-}
-
-/// <summary>新建周期小窗。</summary>
-internal sealed class PeriodCreateDialog : Window
-{
-    private readonly TextBox _name = new() { Text = "生活费", Width = 300 };
-    private readonly DatePicker _start = new() { Width = 300, SelectedDate = DateTime.Today };
-    private readonly CheckBox _endCheck = new() { Content = "计划结束日期", IsChecked = true, VerticalAlignment = VerticalAlignment.Center };
-    private readonly DatePicker _end = new() { Width = 180, SelectedDate = DateTime.Today.AddDays(30) };
-    private readonly TextBlock _error = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
-
-    public string PeriodName => _name.Text.Trim();
-    public string StartDate => _start.SelectedDate!.Value.ToString("yyyy-MM-dd");
-    public string? EndDate => _endCheck.IsChecked == true ? _end.SelectedDate?.ToString("yyyy-MM-dd") : null;
-
-    public PeriodCreateDialog(PeriodRow? existing = null)
-    {
-        Title = existing is null ? "新建记账周期" : "编辑周期";
-        Width = 480;
-        SizeToContent = SizeToContent.Height;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
-        _endCheck.Checked += (_, _) => _end.IsEnabled = true;
-        _endCheck.Unchecked += (_, _) => _end.IsEnabled = false;
-
-        if (existing is not null)
-        {
-            _name.Text = existing.Name;
-            _start.SelectedDate = DateTime.Parse(existing.StartDate);
-            if (existing.EndDate is not null)
-                _end.SelectedDate = DateTime.Parse(existing.EndDate);
-            else
-            {
-                _endCheck.IsChecked = false;
-                _end.IsEnabled = false;
-            }
-        }
-
-        var endRow = new DockPanel();
-        DockPanel.SetDock(_endCheck, Dock.Left);
-        endRow.Children.Add(_endCheck);
-        endRow.Children.Add(_end);
-
-        var ok = new Button { Content = "建立", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "取消", Width = 96, Height = 34, IsCancel = true };
-        var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
-        row.Children.Add(ok);
-        row.Children.Add(cancel);
-
-        var panel = new StackPanel { Margin = new Thickness(20) };
-        panel.Children.Add(Field("名称", _name));
-        panel.Children.Add(Field("开始日期", _start));
-        panel.Children.Add(Field("结束", endRow));
-        panel.Children.Add(_error);
-        panel.Children.Add(row);
-        Content = panel;
-    }
-
-    private static UIElement Field(string label, UIElement input)
-    {
-        var text = new TextBlock { Text = label, Width = 110, VerticalAlignment = VerticalAlignment.Center };
-        var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
-        DockPanel.SetDock(text, Dock.Left);
-        d.Children.Add(text);
-        d.Children.Add(input);
-        return d;
-    }
-
-    private void Accept()
-    {
-        if (PeriodName.Length == 0)
-        {
-            _error.Text = "请填写周期名称。";
-            return;
-        }
-        if (_start.SelectedDate is null || (_endCheck.IsChecked == true && _end.SelectedDate is null))
-        {
-            _error.Text = "请选择完整起止日期。";
-            return;
-        }
-        if (_endCheck.IsChecked == true && _end.SelectedDate!.Value.Date < _start.SelectedDate!.Value.Date)
-        {
-            _error.Text = "结束日期不能早于开始日期。";
-            return;
-        }
-        DialogResult = true;
     }
 }
