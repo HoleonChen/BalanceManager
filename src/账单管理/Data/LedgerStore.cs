@@ -28,7 +28,16 @@ internal static class LedgerStore
     }
 
     private static string ConnectionString(string path, string password)
-        => $"Data Source={path};Password={password};Foreign Keys=True;";
+    {
+        // 用 builder 构建,避免路径/口令含 ';'、'=' 时把连接串解析错
+        var builder = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Password = password,
+            ForeignKeys = true
+        };
+        return builder.ToString();
+    }
 
     /// <summary>新建账本文件并写入骨架 schema(向导已保证文件不存在)。</summary>
     public static LedgerSession Create(string path, string ledgerName, string password)

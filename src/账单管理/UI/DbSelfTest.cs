@@ -34,8 +34,8 @@ internal static class DbSelfTest
             bool wrongBlocked;
             try
             {
-                LedgerStore.Open(path, "wrong-password");
-                wrongBlocked = false;
+                using (LedgerStore.Open(path, "wrong-password"))
+                    wrongBlocked = false; // 不应走到这:正确实现应抛 LedgerPasswordException
             }
             catch (LedgerPasswordException)
             {

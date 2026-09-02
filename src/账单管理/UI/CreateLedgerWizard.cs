@@ -18,7 +18,7 @@ internal sealed class CreateLedgerWizard : Form
     private readonly TextBox _passwordBox = new() { UseSystemPasswordChar = true };
     private readonly TextBox _confirmBox = new() { UseSystemPasswordChar = true };
     private readonly Label _errorLabel = new() { ForeColor = Color.Firebrick, AutoSize = true };
-    private readonly Button _okButton;
+    private Button _okButton = null!;
     private readonly Panel _body = new() { Dock = DockStyle.Fill };
 
     private int _y = 18;
