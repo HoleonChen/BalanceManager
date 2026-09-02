@@ -13,9 +13,65 @@ internal sealed record AccountRow(
     bool Enabled,
     long BalanceBaseCents);
 
+/// <summary>某账户在某日期范围内的收支转构成(不含作废;转账转入=本金+浮动)。</summary>
+internal sealed record AccountMovement(
+    long InCents,
+    long OutCents,
+    long TransferInCents,
+    long TransferOutCents)
+{
+    public long NetCents => InCents - OutCents + TransferInCents - TransferOutCents;
+}
+
 /// <summary>账户查询(记账下拉、账户视图共用)。</summary>
 internal static class Accounts
 {
+    /// <summary>读基准余额与基准日(可能无基准日)。</summary>
+    public static (long BaseCents, string? Date) BaseOf(LedgerSession s, long accountId)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "SELECT balance_base_cents, balance_date FROM accounts WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", accountId);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read())
+            throw new InvalidOperationException("账户不存在。");
+        return (r.GetInt64(0), r.IsDBNull(1) ? null : r.GetString(1));
+    }
+
+    /// <summary>净资产合计 = 各启用账户账面余额之和(停用不计,见设计「停用灰显不计净资产」)。</summary>
+    public static long NetAssets(LedgerSession s)
+    {
+        long total = 0;
+        foreach (var a in ListEnabled(s))
+            total += AccountCalibration.BookCents(s, a.Id);
+        return total;
+    }
+
+    /// <summary>某账户在 [from, to] 内收支/转账构成(状态 normal;日期含端点)。</summary>
+    public static AccountMovement MovementBetween(LedgerSession s, long accountId, string from, string to)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT
+  COALESCE(SUM(CASE WHEN direction = 'in'   AND account_id = $acct
+                    THEN amount_cents ELSE 0 END), 0),
+  COALESCE(SUM(CASE WHEN direction = 'out'  AND account_id = $acct
+                    THEN amount_cents ELSE 0 END), 0),
+  COALESCE(SUM(CASE WHEN direction = 'transfer' AND to_account_id = $acct
+                    THEN amount_cents + COALESCE(delta_cents, 0) ELSE 0 END), 0),
+  COALESCE(SUM(CASE WHEN direction = 'transfer' AND account_id = $acct
+                    THEN COALESCE(principal_cents, 0) ELSE 0 END), 0)
+FROM transactions
+WHERE status = 'normal' AND date BETWEEN $from AND $to
+  AND (account_id = $acct OR to_account_id = $acct);";
+        cmd.Parameters.AddWithValue("$acct", accountId);
+        cmd.Parameters.AddWithValue("$from", from);
+        cmd.Parameters.AddWithValue("$to", to);
+        using var r = cmd.ExecuteReader();
+        r.Read();
+        return new AccountMovement(r.GetInt64(0), r.GetInt64(1), r.GetInt64(2), r.GetInt64(3));
+    }
+
     /// <summary>新建账户(账户表不预置,由用户/导入创建);sort_order 取末位+1。</summary>
     public static long Insert(LedgerSession s, string name, string type, string platform, long balanceBaseCents)
     {

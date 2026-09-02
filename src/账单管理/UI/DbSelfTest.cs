@@ -235,6 +235,9 @@ internal static class DbSelfTest
 
         // 周期生命周期:封存 → 只读(增/改/作废拦截)→ 解除恢复;到期推荐;新周期不改挂封存期游离账
         PeriodLifecycleFlow(s, steps);
+
+        // 账户派生视图:账面=基准+净变动;收支转构成拆分;净资产合计(停用不计)
+        AccountViewFlow(s, steps);
     }
 
     /// <summary>校准余额断言:账面派生 / 记调整流水 / 仅改基准 / 补记明细(仅审计) / 审计历史。</summary>
@@ -479,6 +482,62 @@ WHERE account_id = $a AND name = '差额调整' AND direction = 'out'
         if (Periods.GetLatestExpiredActive(s, today) is not null)
             throw new Exception("封存后仍被推荐新建(应已归档)。");
         steps.Add("生命周期:到期未封存 → 推荐新建;封存后不再推荐");
+    }
+
+    /// <summary>
+    /// 账户派生视图断言:账面 = 基准 + 净变动(收支转拆分各自正确);
+    /// 净资产合计只计启用账户(停用/启用前后总额随之增减)。
+    /// </summary>
+    private static void AccountViewFlow(LedgerSession s, List<string> steps)
+    {
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var c1 = Accounts.Insert(s, "派生甲", "bank", "银行", 10000);
+        var c2 = Accounts.Insert(s, "派生乙", "wallet", "微信", 0);
+
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = today, Direction = "in", AccountId = c1,
+            CategoryId = 10, AmountCents = 5000, Name = "利息", Note = "", Channel = "", InPool = false
+        });
+        Transactions.Transfer(s, new TransferDraft
+        {
+            Date = today, FromAccountId = c1, ToAccountId = c2,
+            PrincipalCents = 2000, DeltaCents = 100, Kind = "互转", Note = "", InPool = false
+        });
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = today, Direction = "out", AccountId = c2,
+            CategoryId = 8, AmountCents = 300, Name = "杂费", Note = "", Channel = "", InPool = false
+        });
+
+        var m1 = Accounts.MovementBetween(s, c1, today, today);
+        if (m1.InCents != 5000 || m1.OutCents != 0
+            || m1.TransferInCents != 0 || m1.TransferOutCents != 2000 || m1.NetCents != 3000)
+            throw new Exception("甲账户收支转拆分不符(应 +5000 收入 −2000 转出 → 净 +3000)。");
+        var m2 = Accounts.MovementBetween(s, c2, today, today);
+        if (m2.InCents != 0 || m2.OutCents != 300
+            || m2.TransferInCents != 2100 || m2.TransferOutCents != 0 || m2.NetCents != 1800)
+            throw new Exception("乙账户收支转拆分不符(应 +2100 转入 −300 支出 → 净 +1800)。");
+        if (AccountCalibration.BookCents(s, c1) != 13000
+            || AccountCalibration.BookCents(s, c2) != 1800)
+            throw new Exception("派生账面不符(基准+净变动)。");
+        var (baseOf, baseDate) = Accounts.BaseOf(s, c1);
+        if (baseOf != 10000 || baseDate is null)
+            throw new Exception("基准余额/基准日读取不符。");
+        steps.Add("账户派生:收支转拆分正确,账面=基准+净变动");
+
+        // 净资产合计只计启用账户:新增(有余额)→ 计入;停用 → 退出合计;启用 → 重新计入
+        var before = Accounts.NetAssets(s);
+        var z = Accounts.Insert(s, "净资产测试", "cash", "现金", 12345);
+        if (Accounts.NetAssets(s) != before + 12345)
+            throw new Exception("新增启用账户未计入净资产合计。");
+        Accounts.Disable(s, z);
+        if (Accounts.NetAssets(s) != before)
+            throw new Exception("停用账户仍计入净资产合计(应排除)。");
+        Accounts.Enable(s, z);
+        if (Accounts.NetAssets(s) != before + 12345)
+            throw new Exception("重新启用后净资产未恢复计入。");
+        steps.Add("净资产:启用计入、停用不计、再启用恢复");
     }
 
     /// <summary>写操作应被只读保护拦截(LedgerReadonlyException);未拦截即断言失败。</summary>
