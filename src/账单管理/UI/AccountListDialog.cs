@@ -5,7 +5,7 @@ using System.Windows.Forms;
 namespace ZhangDan;
 
 /// <summary>
-/// 账户管理:列出启用账户(名称/平台/类型/入账余额),可新建、可停用。
+/// 账户管理:列出全部账户(名称/平台/类型/入账余额;停用的灰显),可新建、停用、重新启用。
 /// 停用后不再出现在记账/转账下拉;账户表不物理删除(流水外键约束 + 历史归属)。
 /// </summary>
 internal sealed class AccountListDialog : Form
@@ -25,14 +25,14 @@ internal sealed class AccountListDialog : Form
         _ledger = ledger;
         Text = "账户管理";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(560, 380);
-        MinimumSize = new Size(500, 300);
+        Size = new Size(580, 400);
+        MinimumSize = new Size(520, 320);
 
-        _list.Columns.Add("名称", 170);
-        _list.Columns.Add("平台", 90);
-        _list.Columns.Add("类型", 150);
+        _list.Columns.Add("名称", 190);
+        _list.Columns.Add("平台", 100);
+        _list.Columns.Add("类型", 160);
         _list.Columns.Add("入账余额", 110, HorizontalAlignment.Right);
-        _list.DoubleClick += (_, _) => DisableSelected();
+        _list.DoubleClick += (_, _) => ToggleEnabled();
 
         var top = new FlowLayoutPanel
         {
@@ -44,14 +44,16 @@ internal sealed class AccountListDialog : Form
         create.Click += (_, _) => CreateAccount();
         var disable = new Button { Text = "停用所选", Width = 90, Height = 30, Margin = new Padding(8, 0, 0, 0) };
         disable.Click += (_, _) => DisableSelected();
+        var enable = new Button { Text = "启用所选", Width = 90, Height = 30, Margin = new Padding(8, 0, 0, 0) };
+        enable.Click += (_, _) => EnableSelected();
         var hint = new Label
         {
-            Text = "停用 = 移出下拉,不作废历史流水。",
+            Text = "停用 = 移出记账/转账下拉,不作废历史流水。",
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(14, 8, 0, 0)
         };
-        top.Controls.AddRange(new Control[] { create, disable, hint });
+        top.Controls.AddRange(new Control[] { create, disable, enable, hint });
 
         var bottom = new FlowLayoutPanel
         {
@@ -74,9 +76,11 @@ internal sealed class AccountListDialog : Form
     {
         _list.BeginUpdate();
         _list.Items.Clear();
-        foreach (var a in Accounts.ListEnabled(_ledger))
+        foreach (var a in Accounts.ListAll(_ledger))
         {
-            var li = new ListViewItem(a.Name);
+            var li = new ListViewItem(a.Enabled ? a.Name : a.Name + "(已停用)");
+            if (!a.Enabled)
+                li.ForeColor = SystemColors.GrayText;
             li.SubItems.Add(a.Platform.Length == 0 ? "—" : a.Platform);
             li.SubItems.Add(AccountDialog.TypeLabel(a.Type));
             li.SubItems.Add(a.BalanceBaseCents == 0 ? "—" : Money.Yuan(a.BalanceBaseCents));
@@ -97,7 +101,7 @@ internal sealed class AccountListDialog : Form
 
     private void DisableSelected()
     {
-        if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not AccountRow a)
+        if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not AccountRow a || !a.Enabled)
             return;
         if (MessageBox.Show(this,
                 $"停用账户「{a.Name}」?\n\n它将不再出现在记账/转账的下拉里;已记流水保留不受影响。",
@@ -105,5 +109,23 @@ internal sealed class AccountListDialog : Form
             return;
         Accounts.Disable(_ledger, a.Id);
         RefreshList();
+    }
+
+    private void EnableSelected()
+    {
+        if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not AccountRow a || a.Enabled)
+            return;
+        Accounts.Enable(_ledger, a.Id);
+        RefreshList();
+    }
+
+    private void ToggleEnabled()
+    {
+        if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not AccountRow a)
+            return;
+        if (a.Enabled)
+            DisableSelected();
+        else
+            EnableSelected();
     }
 }
