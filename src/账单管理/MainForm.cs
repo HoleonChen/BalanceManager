@@ -16,6 +16,11 @@ internal sealed class MainForm : Form
     private ToolStripMenuItem _closeLedgerItem = null!;
     private LedgerSession? _ledger;
 
+    private Panel _home = null!;
+    private Label _hintLabel = null!;
+    private Label _summaryLabel = null!;
+    private ListView _todayList = null!;
+
     public MainForm()
     {
         _settings = AppSettings.Load();
@@ -26,6 +31,7 @@ internal sealed class MainForm : Form
         BuildMenu();
         BuildStatus();
         BuildHint();
+        BuildHome();
 
         TryAutoLoadLastLedger();
     }
@@ -66,7 +72,7 @@ internal sealed class MainForm : Form
 
     private void BuildHint()
     {
-        var hint = new Label
+        _hintLabel = new Label
         {
             Text = "尚无账本 —— 通过「文件 → 新建账本」开始;或「文件 → 打开账本」打开已有 .lbook",
             Dock = DockStyle.Fill,
@@ -74,8 +80,57 @@ internal sealed class MainForm : Form
             ForeColor = SystemColors.GrayText,
             Font = new Font("Microsoft YaHei UI", 12f)
         };
-        Controls.Add(hint);
-        hint.BringToFront();
+        Controls.Add(_hintLabel);
+        _hintLabel.BringToFront();
+    }
+
+    /// <summary>打开账本后的主区:今日流水(记一笔 + 合计 + 列表)。周期总览后续替换/扩展。</summary>
+    private void BuildHome()
+    {
+        _home = new Panel { Dock = DockStyle.Fill, Visible = false };
+
+        var top = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 56,
+            ColumnCount = 3,
+            Padding = new Padding(10, 10, 10, 0)
+        };
+        var record = new Button { Text = "＋ 记一笔", Width = 120, Height = 34, Font = new Font("Microsoft YaHei UI", 11f) };
+        record.Click += (_, _) => OnRecordOne();
+        _summaryLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Padding = new Padding(10, 0, 0, 0) };
+        var title = new Label
+        {
+            Text = "今日流水",
+            AutoSize = true,
+            ForeColor = SystemColors.GrayText,
+            Anchor = AnchorStyles.Right,
+            Font = new Font("Microsoft YaHei UI", 11f)
+        };
+        top.Controls.Add(record, 0, 0);
+        top.Controls.Add(_summaryLabel, 1, 0);
+        top.Controls.Add(title, 2, 0);
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+
+        _todayList = new ListView
+        {
+            Dock = DockStyle.Fill,
+            View = View.Details,
+            FullRowSelect = true,
+            BorderStyle = BorderStyle.FixedSingle,
+            HideSelection = false
+        };
+        _todayList.Columns.Add("时间", 70);
+        _todayList.Columns.Add("名称", 220);
+        _todayList.Columns.Add("分类", 130);
+        _todayList.Columns.Add("账户", 180);
+        _todayList.Columns.Add("金额", 140, HorizontalAlignment.Right);
+
+        _home.Controls.Add(_todayList);
+        _home.Controls.Add(top);
+        Controls.Add(_home);
     }
 
     // ---------- 动作 ----------
@@ -164,6 +219,7 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = false;
         Text = "账单管理";
         _statusLabel.Text = "尚未打开账本";
+        HideHome();
     }
 
     private void SetLedger(LedgerSession session)
@@ -173,6 +229,82 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = true;
         Text = $"{session.Name} —— 账单管理";
         _statusLabel.Text = $"已打开:{session.Path}";
+        ShowHome();
+    }
+
+    private void ShowHome()
+    {
+        _home.Visible = true;
+        _hintLabel.Visible = false;
+        RefreshToday();
+    }
+
+    private void HideHome()
+    {
+        _home.Visible = false;
+        _hintLabel.Visible = true;
+    }
+
+    private void OnRecordOne()
+    {
+        if (_ledger is null)
+            return;
+
+        using var dlg = new RecordDialog(_ledger, _settings);
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            Transactions.Add(_ledger, new TxnDraft
+            {
+                Date = dlg.DateStr,
+                Direction = dlg.Direction,
+                AccountId = dlg.AccountId,
+                CategoryId = dlg.CategoryId,
+                AmountCents = dlg.AmountCents,
+                Name = dlg.TxnName,
+                Note = dlg.Note,
+                Channel = dlg.Channel,
+                InPool = dlg.InPool
+            });
+            RefreshToday();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"保存失败:\n{ex.Message}", "账单管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void RefreshToday()
+    {
+        if (_ledger is null)
+            return;
+
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        var items = Transactions.ListByDate(_ledger, today);
+        var (outCents, inCents) = Transactions.DayTotals(_ledger, today);
+
+        _todayList.BeginUpdate();
+        _todayList.Items.Clear();
+        foreach (var t in items)
+        {
+            var li = new ListViewItem(t.Time);
+            li.SubItems.Add(t.Name);
+            li.SubItems.Add(t.Category);
+            li.SubItems.Add(t.Account);
+            var isOut = t.Direction == "out";
+            var amountSub = li.SubItems.Add(isOut
+                ? "-" + Money.Yuan(t.AmountCents)
+                : "+" + Money.Yuan(t.AmountCents));
+            amountSub.ForeColor = isOut ? Color.Firebrick : Color.ForestGreen;
+            _todayList.Items.Add(li);
+        }
+        _todayList.EndUpdate();
+
+        _summaryLabel.Text =
+            $"今日支出 {Money.Yuan(outCents)} · 今日收入 {Money.Yuan(inCents)} · {items.Count} 笔";
     }
 
     private void Remember(string path)
