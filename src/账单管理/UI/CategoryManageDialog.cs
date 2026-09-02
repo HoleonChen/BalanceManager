@@ -134,7 +134,7 @@ internal sealed class CategoryManageDialog : Form
     private void CreateCategory()
     {
         using var dlg = new CategoryInputDialog(
-            Income ? "新建收入分类" : "新建支出分类", "", withKeyword: true, "创建");
+            Income ? "新建收入分类" : "新建支出分类", "名称", "", withKeyword: true, "创建", "关键词(可空)");
         if (dlg.ShowDialog(this) != DialogResult.OK)
             return;
         var name = dlg.Value;
@@ -158,7 +158,7 @@ internal sealed class CategoryManageDialog : Form
         var c = Selected();
         if (c is null)
             return;
-        using var dlg = new CategoryInputDialog("重命名分类", c.Name, withKeyword: false, "保存");
+        using var dlg = new CategoryInputDialog("重命名分类", "名称", c.Name, withKeyword: false, "保存");
         if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Value.Length == 0 || dlg.Value == c.Name)
             return;
         Categories.Rename(_ledger, c.Id, dlg.Value);
@@ -187,10 +187,10 @@ internal sealed class CategoryManageDialog : Form
         var c = Selected();
         if (c is null)
             return;
-        using var dlg = new CategoryInputDialog($"关键词 · {c.Name}", "", withKeyword: true, "保存");
+        using var dlg = new CategoryInputDialog($"关键词 · {c.Name}", "关键词(空格分隔多个)", KeywordOf(c), withKeyword: false, "保存");
         if (dlg.ShowDialog(this) != DialogResult.OK)
             return;
-        Categories.SetKeyword(_ledger, c.Id, dlg.Keyword);
+        Categories.SetKeyword(_ledger, c.Id, dlg.Value);
         RefreshList();
     }
 
@@ -340,7 +340,8 @@ internal sealed class CategoryManageDialog : Form
         public string Value => _name.Text.Trim();
         public string? Keyword => _withKeyword ? _kw!.Text.Trim() : null;
 
-        public CategoryInputDialog(string title, string initialName, bool withKeyword, string okText)
+        public CategoryInputDialog(string title, string mainLabel, string initialValue,
+            bool withKeyword, string okText, string? kwLabel = null)
         {
             _withKeyword = withKeyword;
             Text = title;
@@ -352,17 +353,17 @@ internal sealed class CategoryManageDialog : Form
             const int xl = 18, xf = 96, wf = 270;
             _name.Location = new Point(xf, 18);
             _name.Width = wf;
-            _name.Text = initialName;
+            _name.Text = initialValue;
 
-            var nameLabel = new Label { Text = "名称", Location = new Point(xl, 21), AutoSize = true };
+            var nameLabel = new Label { Text = mainLabel, Location = new Point(xl, 21), AutoSize = true };
             Controls.Add(nameLabel);
             Controls.Add(_name);
 
             if (withKeyword)
             {
                 _kw = new TextBox { Location = new Point(xf, 58), Width = wf };
-                var kwLabel = new Label { Text = "关键词", Location = new Point(xl, 61), AutoSize = true };
-                Controls.Add(kwLabel);
+                var kwLabelCtrl = new Label { Text = kwLabel ?? "关键词", Location = new Point(xl, 61), AutoSize = true };
+                Controls.Add(kwLabelCtrl);
                 Controls.Add(_kw);
             }
 
