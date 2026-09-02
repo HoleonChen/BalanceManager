@@ -130,6 +130,14 @@ internal sealed class TransferDialog : Form
             _backRadio.Checked = true;
             _yesterdayRadio.Checked = false;
         }
+
+        // 账户不足两个时给出明确引导
+        if (_accounts.Count < 2)
+        {
+            _errorLabel.Text = _accounts.Count == 0
+                ? "还没有账户 —— 请先在记一笔或「工具 → 账户管理」里新建。"
+                : "只有一个账户,无法转账 —— 请再建一个转入账户。";
+        }
     }
 
     private static void FixSelection(ComboBox changed, ComboBox other)
