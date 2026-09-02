@@ -156,8 +156,10 @@ internal sealed class MainForm : Form
         {
             AutoSize = true,
             ForeColor = Color.SteelBlue,
-            Margin = new Padding(6, 8, 0, 0)
+            Margin = new Padding(6, 8, 0, 0),
+            Cursor = Cursors.Hand
         };
+        _periodChip.Click += (_, _) => OnViewFlow();
 
         _summaryLabel = new Label
         {
