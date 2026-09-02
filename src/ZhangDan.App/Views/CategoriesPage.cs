@@ -19,8 +19,32 @@ internal sealed class CategoriesPage : PageBase
     {
         public required CategoryRow C { get; init; }
         public string Name => C.Name;
-        public string Color => C.Color ?? "—";
         public string Keyword { get; init; } = "";
+        public Brush Vivid => ParseHex(C.Color) ?? Brushes.Transparent;
+        public Brush Light => Vivid is SolidColorBrush b ? new SolidColorBrush(Lighten(b.Color)) : Brushes.Transparent;
+
+        private static Brush? ParseHex(string? hex)
+        {
+            if (hex is null || hex.Length != 7 || hex[0] != '#')
+                return null;
+            try
+            {
+                return new SolidColorBrush(System.Windows.Media.Color.FromRgb(
+                    Convert.ToByte(hex.Substring(1, 2), 16),
+                    Convert.ToByte(hex.Substring(3, 2), 16),
+                    Convert.ToByte(hex.Substring(5, 2), 16)));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static System.Windows.Media.Color Lighten(System.Windows.Media.Color c)
+        {
+            byte Mix(byte v) => (byte)(v + (255 - v) * 0.6);
+            return System.Windows.Media.Color.FromRgb(Mix(c.R), Mix(c.G), Mix(c.B));
+        }
     }
 
     public CategoriesPage()
@@ -57,7 +81,7 @@ internal sealed class CategoriesPage : PageBase
 
         var gv = new GridView();
         gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 180, DisplayMemberBinding = Bind("Name") });
-        gv.Columns.Add(new GridViewColumn { Header = "颜色", Width = 90, DisplayMemberBinding = Bind("Color") });
+        gv.Columns.Add(new GridViewColumn { Header = "颜色", Width = 96, CellTemplate = SwatchTemplate() });
         gv.Columns.Add(new GridViewColumn { Header = "关键词(导入归类)", Width = 240, DisplayMemberBinding = Bind("Keyword") });
         _list.View = gv;
         _list.Margin = new Thickness(20, 0, 20, 12);
@@ -74,6 +98,28 @@ internal sealed class CategoriesPage : PageBase
     }
 
     private static System.Windows.Data.Binding Bind(string p) => new(p) { Mode = System.Windows.Data.BindingMode.OneWay };
+
+    /// <summary>颜色列:两个小色块 = 鲜艳 + 自动淡色,不看 hex 值。</summary>
+    private static DataTemplate SwatchTemplate()
+    {
+        var sp = new FrameworkElementFactory(typeof(StackPanel));
+        sp.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        sp.SetValue(StackPanel.VerticalAlignmentProperty, VerticalAlignment.Center);
+        var vivid = new FrameworkElementFactory(typeof(Border));
+        vivid.SetValue(Border.WidthProperty, 26.0);
+        vivid.SetValue(Border.HeightProperty, 14.0);
+        vivid.SetValue(Border.MarginProperty, new Thickness(0, 0, 4, 0));
+        vivid.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
+        vivid.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Vivid"));
+        sp.AppendChild(vivid);
+        var light = new FrameworkElementFactory(typeof(Border));
+        light.SetValue(Border.WidthProperty, 26.0);
+        light.SetValue(Border.HeightProperty, 14.0);
+        light.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
+        light.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Light"));
+        sp.AppendChild(light);
+        return new DataTemplate { VisualTree = sp };
+    }
     private bool Income => _inRadio.IsChecked == true;
     private Row? Selected() => _list.SelectedItem as Row;
 
