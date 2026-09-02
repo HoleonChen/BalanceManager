@@ -200,6 +200,23 @@ internal static class DbSelfTest
         if (outRange != 5500 || inRange != 0)
             throw new Exception("范围合计错误。");
         steps.Add("范围合计 → 作废/转账/期外均正确处理");
+
+        // 就地编辑转账:改转出账户/本金与 Δ
+        var txEdit = Transactions.GetTransfer(s, tx)
+            ?? throw new Exception("读不到待编辑转账。");
+        Transactions.UpdateTransfer(s, txEdit with
+        {
+            FromAccountId = accountA,
+            ToAccountId = accountB,
+            PrincipalCents = 80000,
+            DeltaCents = -100,       // 改为手续费(提现 Δ-1.00)
+            Kind = "提现"
+        });
+        var tx2 = Transactions.GetTransfer(s, tx);
+        if (tx2 is null || tx2.FromAccountId != accountA || tx2.ToAccountId != accountB
+            || tx2.PrincipalCents != 80000 || tx2.DeltaCents != -100 || tx2.Kind != "提现")
+            throw new Exception("转账就地编辑未生效。");
+        steps.Add("就地编辑转账 → 账户/本金/Δ/类别更新");
     }
 
     private static long? GetPeriodId(LedgerSession s, long txId)

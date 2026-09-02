@@ -560,7 +560,7 @@ internal sealed class MainForm : Form
         RefreshView();
     }
 
-    /// <summary>双击列表行:就地编辑该笔支出/收入(转账暂不支持就地编辑)。</summary>
+    /// <summary>双击列表行:就地编辑该笔支出/收入;转账走 EditTransfer。</summary>
     private void EditSelected()
     {
         if (_ledger is null || _todayList.SelectedItems.Count == 0)
@@ -570,8 +570,7 @@ internal sealed class MainForm : Form
 
         if (t.Direction == "transfer")
         {
-            MessageBox.Show(this, "转账暂不支持就地编辑;可右键作废后重新记一笔。",
-                "账单管理", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            EditTransfer(t.Id);
             return;
         }
 
@@ -593,6 +592,41 @@ internal sealed class MainForm : Form
                 AmountCents = dlg.AmountCents,
                 Name = dlg.TxnName,
                 Channel = dlg.Channel,
+                Note = dlg.Note,
+                InPool = dlg.InPool
+            });
+            RefreshView();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"保存失败:\n{ex.Message}", "账单管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>就地编辑一笔转账(改转出/转入/本金/Δ/类别等;日期固定)。</summary>
+    private void EditTransfer(long id)
+    {
+        if (_ledger is null)
+            return;
+
+        var edit = Transactions.GetTransfer(_ledger, id);
+        if (edit is null)
+            return;
+
+        using var dlg = new TransferDialog(_ledger, _settings, edit);
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            Transactions.UpdateTransfer(_ledger, edit with
+            {
+                FromAccountId = dlg.FromAccountId,
+                ToAccountId = dlg.ToAccountId,
+                PrincipalCents = dlg.PrincipalCents,
+                DeltaCents = dlg.DeltaCents,
+                Kind = dlg.Kind,
                 Note = dlg.Note,
                 InPool = dlg.InPool
             });

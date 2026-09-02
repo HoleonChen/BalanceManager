@@ -20,6 +20,7 @@ internal sealed class TransferDialog : Form
 
     private readonly RadioButton _yesterdayRadio = new() { Text = "今天", Checked = true };
     private readonly RadioButton _backRadio = new() { Text = "昨天(凌晨宽限)" };
+    private readonly Label _fixedDateLabel = new() { ForeColor = SystemColors.GrayText, AutoSize = true };
     private readonly ComboBox _fromBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _toBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _principalBox = new();
@@ -32,6 +33,7 @@ internal sealed class TransferDialog : Form
     private readonly Label _deltaLabel = new() { ForeColor = SystemColors.GrayText, AutoSize = true };
 
     private readonly List<AccountRow> _accounts = new();
+    private readonly TransferEditable? _edit;   // 非空 = 编辑已记的转账(日期固定)
     private DateTime _date;
 
     public DateTime Date => _date;
@@ -43,12 +45,13 @@ internal sealed class TransferDialog : Form
     public string Note { get; private set; } = "";
     public bool InPool { get; private set; }
 
-    public TransferDialog(LedgerSession ledger, AppSettings settings)
+    public TransferDialog(LedgerSession ledger, AppSettings settings, TransferEditable? edit = null)
     {
         _ledger = ledger;
         _settings = settings;
+        _edit = edit;
 
-        Text = "记转账";
+        Text = edit is null ? "记转账" : "编辑转账";
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = false;
@@ -67,11 +70,20 @@ internal sealed class TransferDialog : Form
             y += 34;
         }
 
-        // 日期:今天 / 昨天(凌晨宽限)
-        _yesterdayRadio.Location = new Point(xf, y + 2);
-        _backRadio.Location = new Point(xf + 80, y + 2);
-        body.Controls.Add(_yesterdayRadio);
-        body.Controls.Add(_backRadio);
+        // 日期:今天 / 昨天(凌晨宽限);编辑时改为固定日期标签
+        if (_edit is null)
+        {
+            _yesterdayRadio.Location = new Point(xf, y + 2);
+            _backRadio.Location = new Point(xf + 80, y + 2);
+            body.Controls.Add(_yesterdayRadio);
+            body.Controls.Add(_backRadio);
+        }
+        else
+        {
+            _fixedDateLabel.Location = new Point(xf, y + 3);
+            _fixedDateLabel.Text = $"日期固定:{_edit.Date}";
+            body.Controls.Add(_fixedDateLabel);
+        }
         y += 34;
 
         _accounts.AddRange(Accounts.ListEnabled(_ledger));
@@ -124,20 +136,52 @@ internal sealed class TransferDialog : Form
         _receivedBox.TextChanged += (_, _) => { _errorLabel.Text = string.Empty; UpdateDelta(); };
         UpdateDelta();
 
-        // 凌晨宽限:默认记昨天
-        if (_settings.MidnightGraceEnabled && DateTime.Now.Hour < 6)
+        // 凌晨宽限:默认记昨天(编辑模式不改日期)
+        if (_edit is null && _settings.MidnightGraceEnabled && DateTime.Now.Hour < 6)
         {
             _backRadio.Checked = true;
             _yesterdayRadio.Checked = false;
         }
 
-        // 账户不足两个时给出明确引导
-        if (_accounts.Count < 2)
+        if (_edit is not null)
+            Prefill(_edit);
+
+        // 账户不足两个时给出明确引导(编辑态不会触发)
+        if (_edit is null && _accounts.Count < 2)
         {
             _errorLabel.Text = _accounts.Count == 0
                 ? "还没有账户 —— 请先在记一笔或「工具 → 账户管理」里新建。"
                 : "只有一个账户,无法转账 —— 请再建一个转入账户。";
         }
+    }
+
+    /// <summary>把已有转账回填到控件上(仅编辑模式)。日期固定,不提供改期。</summary>
+    private void Prefill(TransferEditable e)
+    {
+        var fi = _accounts.FindIndex(a => a.Id == e.FromAccountId);
+        var ti = _accounts.FindIndex(a => a.Id == e.ToAccountId);
+        if (fi >= 0 && ti >= 0)
+        {
+            _fromBox.SelectedIndex = fi;
+            _toBox.SelectedIndex = ti;
+            if (_fromBox.SelectedIndex == _toBox.SelectedIndex)
+                FixSelection(_fromBox, _toBox);
+        }
+
+        _principalBox.Text = (e.PrincipalCents / 100m).ToString("0.##", CultureInfo.InvariantCulture);
+        _receivedBox.Text = ((e.PrincipalCents + e.DeltaCents) / 100m).ToString("0.##", CultureInfo.InvariantCulture);
+
+        for (int i = 0; i < Kinds.Length; i++)
+        {
+            if (Kinds[i] == e.Kind)
+            {
+                _kindBox.SelectedIndex = i;
+                break;
+            }
+        }
+        _noteBox.Text = e.Note;
+        _poolCheck.Checked = e.InPool;
+        UpdateDelta();
     }
 
     private static void FixSelection(ComboBox changed, ComboBox other)
@@ -219,7 +263,9 @@ internal sealed class TransferDialog : Form
         }
 
         var now = DateTime.Now;
-        _date = _backRadio.Checked ? now.AddDays(-1) : now;
+        _date = _edit is null
+            ? (_backRadio.Checked ? now.AddDays(-1) : now)
+            : DateTime.ParseExact(_edit.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture);   // 编辑不改日期
         FromAccountId = from.Id;
         ToAccountId = to.Id;
         PrincipalCents = Money.ToCents(principalValue);

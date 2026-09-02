@@ -44,6 +44,18 @@ internal sealed record TxnEditable(
     string Note,
     bool InPool);
 
+/// <summary>可编辑的一笔转账(编辑表单回填用)。</summary>
+internal sealed record TransferEditable(
+    long Id,
+    string Date,             // yyyy-MM-dd(编辑不改日期)
+    long FromAccountId,
+    long ToAccountId,
+    long PrincipalCents,
+    long DeltaCents,
+    string Kind,
+    string Note,
+    bool InPool);
+
 /// <summary>流水展示行(带账户/分类名、时间 HH:mm;转账含对端账户/浮动/类别)。</summary>
 internal sealed class TxnListItem
 {
@@ -129,6 +141,51 @@ VALUES
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = "UPDATE transactions SET status = 'cancelled' WHERE id = $id AND status <> 'cancelled';";
         cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>按 id 读一笔转账(非转账/已作废返回 null)。</summary>
+    public static TransferEditable? GetTransfer(LedgerSession s, long id)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT id, date, account_id, to_account_id, principal_cents, delta_cents, transfer_kind, note, in_pool
+FROM transactions
+WHERE id = $id AND direction = 'transfer' AND status <> 'cancelled';";
+        cmd.Parameters.AddWithValue("$id", id);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read())
+            return null;
+        return new TransferEditable(
+            r.GetInt64(0),
+            r.GetString(1),
+            r.GetInt64(2),
+            r.GetInt64(3),
+            r.IsDBNull(4) ? 0 : r.GetInt64(4),
+            r.IsDBNull(5) ? 0 : r.GetInt64(5),
+            r.IsDBNull(6) ? string.Empty : r.GetString(6),
+            r.GetString(7),
+            r.GetInt32(8) != 0);
+    }
+
+    /// <summary>就地修改一笔转账(改转出/转入/本金/Δ/类别/备注/入池;日期与周期归属不变)。</summary>
+    public static void UpdateTransfer(LedgerSession s, TransferEditable t)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+UPDATE transactions
+SET account_id = $from, to_account_id = $to, amount_cents = $principal,
+    principal_cents = $principal, delta_cents = $delta, transfer_kind = $kind,
+    name = $kind, note = $note, in_pool = $pool
+WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$from", t.FromAccountId);
+        cmd.Parameters.AddWithValue("$to", t.ToAccountId);
+        cmd.Parameters.AddWithValue("$principal", t.PrincipalCents);
+        cmd.Parameters.AddWithValue("$delta", t.DeltaCents);
+        cmd.Parameters.AddWithValue("$kind", t.Kind);
+        cmd.Parameters.AddWithValue("$note", t.Note);
+        cmd.Parameters.AddWithValue("$pool", t.InPool ? 1 : 0);
+        cmd.Parameters.AddWithValue("$id", t.Id);
         cmd.ExecuteNonQuery();
     }
 
