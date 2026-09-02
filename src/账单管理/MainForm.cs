@@ -149,6 +149,22 @@ internal sealed class MainForm : Form
         _todayList.Columns.Add("账户", 180);
         _todayList.Columns.Add("金额", 140, HorizontalAlignment.Right);
 
+        // 右键:删除/作废一笔(先选中光标下的行)
+        var ctx = new ContextMenuStrip();
+        var delete = new ToolStripMenuItem("作废/删除这笔…");
+        delete.Click += (_, _) => DeleteSelected();
+        ctx.Items.Add(delete);
+        _todayList.ContextMenuStrip = ctx;
+        _todayList.MouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right)
+                return;
+            _todayList.SelectedItems.Clear();
+            var hit = _todayList.GetItemAt(e.X, e.Y);
+            if (hit != null)
+                hit.Selected = true;
+        };
+
         _home.Controls.Add(_todayList);
         _home.Controls.Add(top);
         Controls.Add(_home);
@@ -328,6 +344,7 @@ internal sealed class MainForm : Form
         foreach (var t in items)
         {
             var li = new ListViewItem(t.Time);
+            li.Tag = t;
             li.SubItems.Add(t.Name);
             li.SubItems.Add(t.Category);
             li.SubItems.Add(t.Account);
@@ -342,6 +359,23 @@ internal sealed class MainForm : Form
 
         _summaryLabel.Text =
             $"支出 {Money.Yuan(outCents)} · 收入 {Money.Yuan(inCents)} · {items.Count} 笔";
+    }
+
+    private void DeleteSelected()
+    {
+        if (_ledger is null || _todayList.SelectedItems.Count == 0)
+            return;
+        if (_todayList.SelectedItems[0].Tag is not TxnListItem t)
+            return;
+
+        var sign = t.Direction == "out" ? "-" : "+";
+        if (MessageBox.Show(this,
+                $"作废这笔并撤出统计?\n\n  {t.Name}\n  {sign}{Money.Yuan(t.AmountCents)} · {t.Account}\n\n记录仍留在库中(标记作废),只是不再计入统计。",
+                "作废流水", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK)
+            return;
+
+        Transactions.Cancel(_ledger, t.Id);
+        RefreshView();
     }
 
     private void Remember(string path)

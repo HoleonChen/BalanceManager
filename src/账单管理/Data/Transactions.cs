@@ -60,6 +60,15 @@ VALUES
         return Convert.ToInt64(cmd.ExecuteScalar());
     }
 
+    /// <summary>作废一笔(软删:置 status='cancelled',流水与合计均不再计入,记录仍留库备查)。</summary>
+    public static void Cancel(LedgerSession s, long id)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "UPDATE transactions SET status = 'cancelled' WHERE id = $id AND status <> 'cancelled';";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>某日流水(非转账、非取消),按录入倒序。</summary>
     public static IReadOnlyList<TxnListItem> ListByDate(LedgerSession s, string date)
     {
