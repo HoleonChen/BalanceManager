@@ -16,6 +16,7 @@ internal sealed class MainForm : Form
     private ToolStripMenuItem _closeLedgerItem = null!;
     private ToolStripMenuItem _newPeriodItem = null!;
     private ToolStripMenuItem _accountsItem = null!;
+    private ToolStripMenuItem _calibrateItem = null!;
     private ToolStripMenuItem _flowItem = null!;
     private ToolStripMenuItem _poolItem = null!;
     private LedgerSession? _ledger;
@@ -68,6 +69,9 @@ internal sealed class MainForm : Form
         _accountsItem = MakeItem("账户管理…", null, (_, _) => OnManageAccounts());
         _accountsItem.Enabled = false;
         tools.DropDownItems.Add(_accountsItem);
+        _calibrateItem = MakeItem("校准余额…", null, (_, _) => OnCalibrate());
+        _calibrateItem.Enabled = false;
+        tools.DropDownItems.Add(_calibrateItem);
         _flowItem = MakeItem("查看本周期流水…", null, (_, _) => OnViewFlow());
         _flowItem.Enabled = false;
         tools.DropDownItems.Add(_flowItem);
@@ -316,6 +320,7 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = false;
         _newPeriodItem.Enabled = false;
         _accountsItem.Enabled = false;
+        _calibrateItem.Enabled = false;
         _flowItem.Enabled = false;
         _poolItem.Enabled = false;
         Text = "账单管理";
@@ -330,6 +335,7 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = true;
         _newPeriodItem.Enabled = true;
         _accountsItem.Enabled = true;
+        _calibrateItem.Enabled = true;
         _flowItem.Enabled = true;
         _poolItem.Enabled = true;
         Text = $"{session.Name} —— 账单管理";
@@ -421,6 +427,14 @@ internal sealed class MainForm : Form
             return;
         using var dlg = new AccountListDialog(_ledger);
         dlg.ShowDialog(this);
+    }
+
+    /// <summary>校准余额(对准某账户实际;含审计历史)。</summary>
+    private void OnCalibrate()
+    {
+        if (_ledger is null)
+            return;
+        CalibrationDialog.Run(this, _ledger);
     }
 
     /// <summary>查看覆盖今天的进行中周期的整期流水(只读总览)。</summary>

@@ -229,6 +229,86 @@ internal static class DbSelfTest
 
         // 资金池(单池):已花 = 池账户本期 in_pool 直支出 + 勾入池转出;收入/不入池/他账户不计
         PoolFlow(s, accountA, accountB, periodId, date, steps);
+
+        // 校准余额:账面 = 基准 + 基准日后净变动;三种处理 + 审计历史
+        CalibrationFlow(s, accountA, date, steps);
+    }
+
+    /// <summary>校准余额断言:账面派生 / 记调整流水 / 仅改基准 / 补记明细(仅审计) / 审计历史。</summary>
+    private static void CalibrationFlow(LedgerSession s, long sourceAccount, string date, List<string> steps)
+    {
+        var card = Accounts.Insert(s, "校准卡", "bank", "银行", 200000);
+        if (AccountCalibration.BookCents(s, card) != 200000)
+            throw new Exception("建户初始余额的账面不符。");
+
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = date, Direction = "in", AccountId = card,
+            CategoryId = 10, AmountCents = 5000, Name = "利息", Note = "", Channel = "", InPool = false
+        });
+        Transactions.Transfer(s, new TransferDraft
+        {
+            Date = date, FromAccountId = sourceAccount, ToAccountId = card,
+            PrincipalCents = 30000, DeltaCents = 0, Kind = "互转", Note = "", InPool = false
+        });
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = date, Direction = "out", AccountId = card,
+            CategoryId = 8, AmountCents = 2000, Name = "杂费", Note = "", Channel = "", InPool = false
+        });
+        if (AccountCalibration.BookCents(s, card) != 233000)
+            throw new Exception("账面派生错误(基准+收支+转入)。");
+        steps.Add("校准:账面 = 基准 + 基准日后收支转");
+
+        // 记调整流水(实际 228000 < 账面 → 支出 差额调整 5000,不入池)
+        var diff = AccountCalibration.Apply(s, card, 228000, CalibMethod.Adjustment, "对账");
+        if (diff != -5000 || AccountCalibration.BookCents(s, card) != 228000)
+            throw new Exception("记调整流水后账面未对齐实际。");
+        bool adjFound;
+        using (var cmd = s.Connection.CreateCommand())
+        {
+            cmd.CommandText = @"
+SELECT COUNT(*) FROM transactions
+WHERE account_id = $a AND name = '差额调整' AND direction = 'out'
+  AND amount_cents = 5000 AND in_pool = 0 AND status = 'normal';";
+            cmd.Parameters.AddWithValue("$a", card);
+            adjFound = Convert.ToInt64(cmd.ExecuteScalar()) == 1;
+        }
+        if (!adjFound)
+            throw new Exception("调整流水(差额调整,不入池)未正确落库。");
+        steps.Add("校准:记调整流水 → 差额分类不入池,账面对齐");
+
+        var hist = AccountCalibration.History(s, card);
+        if (hist.Count != 1 || hist[0].BookCents != 233000 || hist[0].ActualCents != 228000
+            || hist[0].DiffCents != -5000 || hist[0].Method != CalibMethod.Adjustment)
+            throw new Exception("校准审计历史不符。");
+        steps.Add("校准:审计历史记录(时间/账面/实际/差额/方式)");
+
+        // 仅更新基准:账面 50000 → 实际 47000,不动流水
+        var baseCard = Accounts.Insert(s, "基准卡", "cash", "现金", 50000);
+        AccountCalibration.Apply(s, baseCard, 47000, CalibMethod.BaseOnly, "改基准");
+        if (AccountCalibration.BookCents(s, baseCard) != 47000)
+            throw new Exception("仅更新基准后账面未对齐。");
+        long baseCardTxns;
+        using (var cmd = s.Connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM transactions WHERE account_id = $a;";
+            cmd.Parameters.AddWithValue("$a", baseCard);
+            baseCardTxns = Convert.ToInt64(cmd.ExecuteScalar());
+        }
+        if (baseCardTxns != 0)
+            throw new Exception("仅更新基准不应产生流水。");
+        var bh = AccountCalibration.History(s, baseCard);
+        if (bh.Count != 1 || bh[0].Method != CalibMethod.BaseOnly || bh[0].DiffCents != -3000)
+            throw new Exception("仅更新基准的审计记录不符。");
+        steps.Add("校准:仅更新基准(不动流水) + 审计");
+
+        // 补记真实明细:不自动改账,仅留审计(账面已一致差额 0)
+        var diff0 = AccountCalibration.Apply(s, baseCard, 47000, CalibMethod.RealDetails, "补记后归零");
+        if (diff0 != 0 || AccountCalibration.History(s, baseCard).Count != 2
+            || AccountCalibration.BookCents(s, baseCard) != 47000)
+            throw new Exception("补记真实明细处理不符。");
+        steps.Add("校准:补记真实明细(差额 0 仅审计)");
     }
 
     /// <summary>资金池单池派生断言(追加在其余断言之后,状态已知:accountA 池上有 预记 5500 支出 in_pool)。</summary>

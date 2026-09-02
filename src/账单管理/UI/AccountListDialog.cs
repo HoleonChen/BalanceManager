@@ -46,6 +46,8 @@ internal sealed class AccountListDialog : Form
         disable.Click += (_, _) => DisableSelected();
         var enable = new Button { Text = "启用所选", Width = 90, Height = 30, Margin = new Padding(8, 0, 0, 0) };
         enable.Click += (_, _) => EnableSelected();
+        var calibrate = new Button { Text = "校准所选…", Width = 96, Height = 30, Margin = new Padding(8, 0, 0, 0) };
+        calibrate.Click += (_, _) => CalibrateSelected();
         var hint = new Label
         {
             Text = "停用 = 移出记账/转账下拉,不作废历史流水。",
@@ -53,7 +55,7 @@ internal sealed class AccountListDialog : Form
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(14, 8, 0, 0)
         };
-        top.Controls.AddRange(new Control[] { create, disable, enable, hint });
+        top.Controls.AddRange(new Control[] { create, disable, enable, calibrate, hint });
 
         var bottom = new FlowLayoutPanel
         {
@@ -127,5 +129,14 @@ internal sealed class AccountListDialog : Form
             DisableSelected();
         else
             EnableSelected();
+    }
+
+    /// <summary>校准所选账户余额(对准实际;含审计历史);完成后刷新入账余额列。</summary>
+    private void CalibrateSelected()
+    {
+        if (_list.SelectedItems.Count == 0 || _list.SelectedItems[0].Tag is not AccountRow a)
+            return;
+        CalibrationDialog.Run(this, _ledger, a.Id);
+        RefreshList();
     }
 }
