@@ -17,6 +17,7 @@ internal sealed class MainForm : Form
     private ToolStripMenuItem _newPeriodItem = null!;
     private ToolStripMenuItem _accountsItem = null!;
     private ToolStripMenuItem _flowItem = null!;
+    private ToolStripMenuItem _poolItem = null!;
     private LedgerSession? _ledger;
 
     private Panel _home = null!;
@@ -24,6 +25,7 @@ internal sealed class MainForm : Form
     private Label _summaryLabel = null!;
     private Label _dateLabel = null!;
     private Label _periodChip = null!;
+    private Label _poolLabel = null!;
     private ListView _todayList = null!;
     private DateTime _viewDate;
 
@@ -69,6 +71,9 @@ internal sealed class MainForm : Form
         _flowItem = MakeItem("查看本周期流水…", null, (_, _) => OnViewFlow());
         _flowItem.Enabled = false;
         tools.DropDownItems.Add(_flowItem);
+        _poolItem = MakeItem("设置资金池…", null, (_, _) => OnPool());
+        _poolItem.Enabled = false;
+        tools.DropDownItems.Add(_poolItem);
         tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add(MakeItem("数据自检…", null, (_, _) => DbSelfTest.Run(this)));
 
@@ -113,8 +118,8 @@ internal sealed class MainForm : Form
         var top = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 52,
-            Padding = new Padding(10, 8, 10, 0)
+            Height = 60,
+            Padding = new Padding(10, 10, 10, 0)
         };
 
         var record = new Button
@@ -167,10 +172,19 @@ internal sealed class MainForm : Form
         {
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
-            Margin = new Padding(12, 8, 0, 0)
+            Margin = new Padding(12, 10, 0, 0)
         };
 
-        top.Controls.AddRange(new Control[] { record, transfer, prev, _dateLabel, next, today, _periodChip, _summaryLabel });
+        _poolLabel = new Label
+        {
+            AutoSize = true,
+            ForeColor = Color.SteelBlue,
+            Margin = new Padding(14, 10, 0, 0),
+            Cursor = Cursors.Hand
+        };
+        _poolLabel.Click += (_, _) => OnPool();
+
+        top.Controls.AddRange(new Control[] { record, transfer, prev, _dateLabel, next, today, _periodChip, _summaryLabel, _poolLabel });
 
         _todayList = new ListView
         {
@@ -303,6 +317,7 @@ internal sealed class MainForm : Form
         _newPeriodItem.Enabled = false;
         _accountsItem.Enabled = false;
         _flowItem.Enabled = false;
+        _poolItem.Enabled = false;
         Text = "账单管理";
         _statusLabel.Text = "尚未打开账本";
         HideHome();
@@ -316,6 +331,7 @@ internal sealed class MainForm : Form
         _newPeriodItem.Enabled = true;
         _accountsItem.Enabled = true;
         _flowItem.Enabled = true;
+        _poolItem.Enabled = true;
         Text = $"{session.Name} —— 账单管理";
         _statusLabel.Text = $"已打开:{session.Path}";
         ShowHome();
@@ -432,6 +448,69 @@ internal sealed class MainForm : Form
 
         using var dlg = new PeriodFlowDialog(_ledger, p.Name, p.StartDate, p.EndDate);
         dlg.ShowDialog(this);
+    }
+
+    /// <summary>设置资金池:作用于覆盖今天的进行中周期(补建/修改池)。</summary>
+    private void OnPool()
+    {
+        if (_ledger is null)
+            return;
+
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var p = Periods.GetCoveringActive(_ledger, today);
+        if (p is null)
+        {
+            MessageBox.Show(this,
+                "资金池绑定在记账周期上。当前没有覆盖今天的进行中周期。\n请先在「文件 → 新建记账周期」建立周期,即可为本周期设置资金池。",
+                "账单管理", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dlg = new PoolDialog(_ledger, p, Pools.Get(_ledger, p.Id));
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+            return;
+
+        try
+        {
+            Pools.Save(_ledger, p.Id, dlg.PoolName, dlg.AccountId, dlg.BudgetCents, dlg.ReserveCents);
+            RefreshPoolLabel();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"保存资金池失败:\n{ex.Message}", "账单管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>顶栏资金池标签:覆盖今天周期的池的 剩余/可支配;未设池给出灰色提示(可点设置)。</summary>
+    private void RefreshPoolLabel()
+    {
+        if (_ledger is null)
+        {
+            _poolLabel.Text = string.Empty;
+            return;
+        }
+
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var p = Periods.GetCoveringActive(_ledger, today);
+        if (p is null)
+        {
+            _poolLabel.Text = string.Empty;
+            return;
+        }
+
+        var pool = Pools.Get(_ledger, p.Id);
+        if (pool is null)
+        {
+            _poolLabel.ForeColor = SystemColors.GrayText;
+            _poolLabel.Text = "· 资金池未设置(点击设置)";
+            return;
+        }
+
+        _poolLabel.ForeColor = Color.SteelBlue;
+        var st = Pools.State(_ledger, pool);
+        _poolLabel.Text =
+            $"· 池:剩余 {Money.Yuan(st.RemainingCents)} / 可支配 {Money.Yuan(st.DisposableCents)}";
     }
 
     /// <summary>顶栏周期 chip:覆盖今天的进行中周期;没有则置灰提示。</summary>
@@ -591,6 +670,8 @@ internal sealed class MainForm : Form
 
         _summaryLabel.Text =
             $"支出 {Money.Yuan(outCents)} · 收入 {Money.Yuan(inCents)} · {items.Count} 笔";
+
+        RefreshPoolLabel();
     }
 
     private void DeleteSelected()

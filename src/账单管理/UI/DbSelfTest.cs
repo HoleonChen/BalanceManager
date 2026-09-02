@@ -226,6 +226,82 @@ internal static class DbSelfTest
         if (!Accounts.ListEnabled(s).Any(a => a.Id == accountB))
             throw new Exception("重新启用后账户未恢复。");
         steps.Add("账户停用/启用 → 下拉可见性正确");
+
+        // 资金池(单池):已花 = 池账户本期 in_pool 直支出 + 勾入池转出;收入/不入池/他账户不计
+        PoolFlow(s, accountA, accountB, periodId, date, steps);
+    }
+
+    /// <summary>资金池单池派生断言(追加在其余断言之后,状态已知:accountA 池上有 预记 5500 支出 in_pool)。</summary>
+    private static void PoolFlow(LedgerSession s, long accountA, long accountB, long periodId,
+        string date, List<string> steps)
+    {
+        Pools.Save(s, periodId, "生活费池", accountA, 100000, 20000);
+        var p = Pools.Get(s, periodId)
+            ?? throw new Exception("池保存后读不回。");
+        if (p.BudgetCents != 100000 || p.ReserveCents != 20000 || p.AccountId != accountA)
+            throw new Exception("池字段存错。");
+
+        var st = Pools.State(s, p);
+        if (st.SpentCents != 5500 || st.RemainingCents != 94500 || st.DisposableCents != 74500)
+            throw new Exception("池已花派生错误(应只含早前那笔正常 in_pool 支出)。");
+        steps.Add("资金池:池保存 + 已花/剩余/可支配派生正确");
+
+        // 记一笔 in_pool 支出(池账户)→ 已花增加
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = date, Direction = "out", AccountId = accountA,
+            CategoryId = 1, AmountCents = 7000, Name = "池测", Note = "", Channel = "", InPool = true
+        });
+        if (Pools.State(s, Pools.Get(s, periodId)!).SpentCents != 12500)
+            throw new Exception("池账户 in_pool 支出未计入已花。");
+
+        // 非池账户支出(即使 in_pool)、池账户不入池支出 → 均不计已花
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = date, Direction = "out", AccountId = accountB,
+            CategoryId = 1, AmountCents = 1000, Name = "他账户", Note = "", Channel = "", InPool = true
+        });
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = date, Direction = "out", AccountId = accountA,
+            CategoryId = 8, AmountCents = 3000, Name = "不入池", Note = "", Channel = "", InPool = false
+        });
+        if (Pools.State(s, Pools.Get(s, periodId)!).SpentCents != 12500)
+            throw new Exception("他账户/不入池支出被错误计入已花。");
+        steps.Add("资金池:他账户与不入池支出不计已花");
+
+        // 勾「计入池」的转出(池账户→他账户)→ 本金计入已花
+        Transactions.Transfer(s, new TransferDraft
+        {
+            Date = date, FromAccountId = accountA, ToAccountId = accountB,
+            PrincipalCents = 20000, DeltaCents = 0, Kind = "互转", Note = "", InPool = true
+        });
+        if (Pools.State(s, Pools.Get(s, periodId)!).SpentCents != 32500)
+            throw new Exception("勾入池转出的本金未计入已花。");
+        steps.Add("资金池:勾「计入池」转出本金计入已花");
+
+        // 作废一笔池内支出 → 撤出已花(退款/作废恢复池)
+        var extra = Transactions.ListByDate(s, date).First(x => x.Name == "池测");
+        Transactions.Cancel(s, extra.Id);
+        if (Pools.State(s, Pools.Get(s, periodId)!).SpentCents != 25500)
+            throw new Exception("作废池内支出后已花未恢复。");
+        steps.Add("资金池:作废撤出已花");
+
+        // 再次保存(改预算)→ 仍单池、不新增行
+        Pools.Save(s, periodId, "生活费池", accountA, 90000, 20000);
+        long count;
+        using (var cmd = s.Connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM fund_pools WHERE period_id = $pid;";
+            cmd.Parameters.AddWithValue("$pid", periodId);
+            count = Convert.ToInt64(cmd.ExecuteScalar());
+        }
+        var p2 = Pools.Get(s, periodId)!;
+        if (count != 1 || p2.BudgetCents != 90000)
+            throw new Exception("单池 upsert 失败(行数/预算不符)。");
+        if (Pools.State(s, p2).RemainingCents != 64500)
+            throw new Exception("改预算后剩余派生不符。");
+        steps.Add("资金池:同周期二次保存仍是单池(upsert)");
     }
 
     private static long? GetPeriodId(LedgerSession s, long txId)

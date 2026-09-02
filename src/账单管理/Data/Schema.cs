@@ -9,7 +9,8 @@ namespace ZhangDan;
 /// </summary>
 internal static class Schema
 {
-    public const int CurrentVersion = 2;
+    // v3:资金池落地——每周期至多一个池(单池,fund_pools.period_id 唯一)。
+    public const int CurrentVersion = 3;
 
     // 注意:Microsoft.Data.Sqlite 一条命令只执行首条语句,故统一按 ';' 切分逐条执行。
     private const string Ddl = @"
@@ -89,6 +90,9 @@ CREATE TABLE IF NOT EXISTS fund_pools (
   created_at    TEXT NOT NULL
 );
 
+-- 单池:每个周期至多一个资金池(设计一期只做单池);upsert 靠此唯一约束
+CREATE UNIQUE INDEX IF NOT EXISTS ux_fund_pools_period ON fund_pools(period_id);
+
 CREATE TABLE IF NOT EXISTS reserve_items (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   pool_id      INTEGER NOT NULL REFERENCES fund_pools(id),
@@ -149,6 +153,13 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order) VALUES
             // v2:转账类别(设计 §3.5 五类:互转/充值/提现/理财结算/存取),
             // 与收支分类分开存,避免污染手动录入的收支分类列表
             ExecEach(conn, "ALTER TABLE transactions ADD COLUMN transfer_kind TEXT;");
+        }
+
+        if (version < 3)
+        {
+            // v3:资金池单池约束(每周期至多一个池);新库建表已含,老库补加
+            ExecEach(conn,
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_fund_pools_period ON fund_pools(period_id);");
         }
 
         if (version < CurrentVersion)
