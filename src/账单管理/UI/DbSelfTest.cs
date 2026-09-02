@@ -194,6 +194,12 @@ internal static class DbSelfTest
         if (outEarly != 5500)
             throw new Exception("编辑后合计未更新。");
         steps.Add("就地编辑 → 金额/名称更新,合计刷新");
+
+        // 范围合计:期内 = 已编辑的早前支出 5500(当日那笔已作废、转账不计入);期外收入不混入
+        var (outRange, inRange) = Transactions.RangeTotals(s, periodStart, periodEnd);
+        if (outRange != 5500 || inRange != 0)
+            throw new Exception("范围合计错误。");
+        steps.Add("范围合计 → 作废/转账/期外均正确处理");
     }
 
     private static long? GetPeriodId(LedgerSession s, long txId)

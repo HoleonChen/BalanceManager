@@ -16,6 +16,7 @@ internal sealed class MainForm : Form
     private ToolStripMenuItem _closeLedgerItem = null!;
     private ToolStripMenuItem _newPeriodItem = null!;
     private ToolStripMenuItem _accountsItem = null!;
+    private ToolStripMenuItem _flowItem = null!;
     private LedgerSession? _ledger;
 
     private Panel _home = null!;
@@ -61,6 +62,9 @@ internal sealed class MainForm : Form
         _accountsItem = MakeItem("账户管理…", null, (_, _) => OnManageAccounts());
         _accountsItem.Enabled = false;
         tools.DropDownItems.Add(_accountsItem);
+        _flowItem = MakeItem("查看本周期流水…", null, (_, _) => OnViewFlow());
+        _flowItem.Enabled = false;
+        tools.DropDownItems.Add(_flowItem);
         tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add(MakeItem("数据自检…", null, (_, _) => DbSelfTest.Run(this)));
 
@@ -284,6 +288,7 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = false;
         _newPeriodItem.Enabled = false;
         _accountsItem.Enabled = false;
+        _flowItem.Enabled = false;
         Text = "账单管理";
         _statusLabel.Text = "尚未打开账本";
         HideHome();
@@ -296,6 +301,7 @@ internal sealed class MainForm : Form
         _closeLedgerItem.Enabled = true;
         _newPeriodItem.Enabled = true;
         _accountsItem.Enabled = true;
+        _flowItem.Enabled = true;
         Text = $"{session.Name} —— 账单管理";
         _statusLabel.Text = $"已打开:{session.Path}";
         ShowHome();
@@ -337,6 +343,33 @@ internal sealed class MainForm : Form
         if (_ledger is null)
             return;
         using var dlg = new AccountListDialog(_ledger);
+        dlg.ShowDialog(this);
+    }
+
+    /// <summary>查看覆盖今天的进行中周期的整期流水(只读总览)。</summary>
+    private void OnViewFlow()
+    {
+        if (_ledger is null)
+            return;
+
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var p = Periods.GetCoveringActive(_ledger, today);
+        if (p is null)
+        {
+            MessageBox.Show(this,
+                "当前没有覆盖今天的进行中周期。\n请先在「文件 → 新建记账周期」建立周期,即可按周期查看流水。",
+                "账单管理", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (p.EndDate is null)
+        {
+            MessageBox.Show(this,
+                $"周期「{p.Name}」没有计划结束日期,暂无法框定查看范围。\n(长期周期查看可后续补)",
+                "账单管理", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dlg = new PeriodFlowDialog(_ledger, p.Name, p.StartDate, p.EndDate);
         dlg.ShowDialog(this);
     }
 

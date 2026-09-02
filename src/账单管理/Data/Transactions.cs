@@ -56,6 +56,7 @@ internal sealed class TxnListItem
     public string Category { get; init; } = "";
     public string Kind { get; init; } = "";           // 转账类别(互转/充值/…)
     public long DeltaCents { get; init; }             // 转账浮动
+    public string Date { get; init; } = "";           // yyyy-MM-dd(范围查询用)
     public string Time { get; init; } = "";
 }
 
@@ -185,7 +186,7 @@ WHERE id = $id;";
         cmd.CommandText = @"
 SELECT t.id, t.direction, t.amount_cents, t.name,
        a.name, c.name, substr(t.created_at, 12, 5),
-       b.name, t.delta_cents, t.transfer_kind
+       b.name, t.delta_cents, t.transfer_kind, t.date
 FROM transactions t
 LEFT JOIN accounts a   ON a.id  = t.account_id
 LEFT JOIN accounts b   ON b.id  = t.to_account_id
@@ -208,10 +209,68 @@ ORDER BY t.id DESC;";
                 Time = r.IsDBNull(6) ? string.Empty : r.GetString(6),
                 AccountTo = r.IsDBNull(7) ? string.Empty : r.GetString(7),
                 DeltaCents = r.IsDBNull(8) ? 0 : r.GetInt64(8),
-                Kind = r.IsDBNull(9) ? string.Empty : r.GetString(9)
+                Kind = r.IsDBNull(9) ? string.Empty : r.GetString(9),
+                Date = r.IsDBNull(10) ? string.Empty : r.GetString(10)
             });
         }
         return list;
+    }
+
+    /// <summary>某日期范围流水(含起止、非取消),按日期倒序、同日按录入倒序。</summary>
+    public static IReadOnlyList<TxnListItem> ListByRange(LedgerSession s, string startDate, string endDate)
+    {
+        var list = new List<TxnListItem>();
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT t.id, t.direction, t.amount_cents, t.name,
+       a.name, c.name, substr(t.created_at, 12, 5),
+       b.name, t.delta_cents, t.transfer_kind, t.date
+FROM transactions t
+LEFT JOIN accounts a   ON a.id  = t.account_id
+LEFT JOIN accounts b   ON b.id  = t.to_account_id
+LEFT JOIN categories c ON c.id  = t.category_id
+WHERE t.date BETWEEN $start AND $end AND t.status <> 'cancelled'
+ORDER BY t.date DESC, t.id DESC;";
+        cmd.Parameters.AddWithValue("$start", startDate);
+        cmd.Parameters.AddWithValue("$end", endDate);
+
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new TxnListItem
+            {
+                Id = r.GetInt64(0),
+                Direction = r.GetString(1),
+                AmountCents = r.GetInt64(2),
+                Name = r.GetString(3),
+                Account = r.IsDBNull(4) ? string.Empty : r.GetString(4),
+                Category = r.IsDBNull(5) ? string.Empty : r.GetString(5),
+                Time = r.IsDBNull(6) ? string.Empty : r.GetString(6),
+                AccountTo = r.IsDBNull(7) ? string.Empty : r.GetString(7),
+                DeltaCents = r.IsDBNull(8) ? 0 : r.GetInt64(8),
+                Kind = r.IsDBNull(9) ? string.Empty : r.GetString(9),
+                Date = r.IsDBNull(10) ? string.Empty : r.GetString(10)
+            });
+        }
+        return list;
+    }
+
+    /// <summary>某日期范围支出/收入合计(不含转账、取消)。</summary>
+    public static (long OutCents, long InCents) RangeTotals(LedgerSession s, string startDate, string endDate)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT
+  COALESCE(SUM(CASE WHEN direction = 'out' THEN amount_cents ELSE 0 END), 0),
+  COALESCE(SUM(CASE WHEN direction = 'in'  THEN amount_cents ELSE 0 END), 0)
+FROM transactions
+WHERE date BETWEEN $start AND $end AND direction <> 'transfer' AND status <> 'cancelled';";
+        cmd.Parameters.AddWithValue("$start", startDate);
+        cmd.Parameters.AddWithValue("$end", endDate);
+
+        using var r = cmd.ExecuteReader();
+        r.Read();
+        return (r.GetInt64(0), r.GetInt64(1));
     }
 
     /// <summary>某日支出/收入合计(不含转账、取消)。</summary>
