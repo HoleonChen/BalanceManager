@@ -15,6 +15,12 @@ internal sealed class ReportContent
     public List<ReportSheet> Sheets { get; } = new();
     public byte[]? TrendPng { get; set; }
     public byte[]? SharePng { get; set; }
+
+    /// <summary>趋势图横轴各列对应周期名(与图内 P0…Pn 对齐)。</summary>
+    public List<string> TrendPeriodMap { get; } = new();
+
+    /// <summary>趋势图各彩色带 = 支出分类(名称 + 色,供 PDF 图例色块表)。</summary>
+    public List<(string Name, string Hex)> TrendCats { get; } = new();
 }
 
 /// <summary>
@@ -133,8 +139,12 @@ internal static class ReportComposer
         }).ToList();
         content.Sheets.Add(new ReportSheet("跨周期趋势", new[] { "周期", "收入", "支出", "结余", "校准(支)" }, rows));
 
-        // 图:堆叠面积(分类自下而上按 sort_order + 未归类尾部)
+        // 图:堆叠面积(分类自下而上按 sort_order + 未归类尾部);图内无中文,语义交给 PDF 说明/图例表
         var union = UnionAxis(s, cols);
+        content.TrendPeriodMap.Clear();
+        foreach (var c in cols) content.TrendPeriodMap.Add(c.Name);
+        content.TrendCats.Clear();
+        content.TrendCats.AddRange(union);
         if (union.Count > 0 && cols.Count > 0)
         {
             var cents = new double[union.Count, cols.Count];
@@ -144,8 +154,7 @@ internal static class ReportComposer
                 for (int i = 0; i < union.Count; i++)
                     cents[i, j] = byName.GetValueOrDefault(union[i].Name);
             }
-            content.TrendPng = ReportCharts.StackedArea(
-                cols.Select(c => c.Name).ToList(), union, cents, req.PercentMode);
+            content.TrendPng = ReportCharts.StackedArea(cols.Count, union.Select(u => u.Hex).ToList(), cents, req.PercentMode);
         }
     }
 

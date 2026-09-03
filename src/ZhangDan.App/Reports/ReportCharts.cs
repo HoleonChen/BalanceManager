@@ -11,19 +11,15 @@ namespace ZhangDan.App.Reporting;
 internal static class ReportCharts
 {
     /// <summary>
-    /// 跨周期堆叠面积:每列=一个周期(x 轴按时间序),类别自下而上堆叠为淡色半透明带,带顶勾鲜艳折线;
-    /// 底轴 tick 打周期名,x 轴标题「周期(按时间序)」;图例=各分类色块。percent 时各列按自身总额归一 %。
+    /// 跨周期堆叠面积图:每列=一个周期(横轴 P0…Pn-1),类别自下而上堆叠为淡色半透明带、带顶勾鲜艳折线。
+    /// <b>图内不含中文</b>——周期名/图例语义由 PDF 在图下方以 QuestPDF 中文文字+色块表给出(ScottPlot 中文字体渲染不可靠)。
     /// </summary>
-    public static byte[]? StackedArea(
-        IReadOnlyList<string> columnNames,
-        IReadOnlyList<(string Name, string Hex)> categories,
-        double[,] cents,
-        bool percent)
+    public static byte[]? StackedArea(int columns, IReadOnlyList<string> hexes, double[,] cents, bool percent)
     {
         try
         {
-            int n = columnNames.Count;
-            int m = categories.Count;
+            int n = columns;
+            int m = hexes.Count;
             if (n == 0 || m == 0)
                 return null;
             var plot = new Plot();
@@ -48,26 +44,20 @@ internal static class ReportCharts
                     top[j] = bottom[j] + v;
                 }
                 double[] xs = ScottPlot.Generate.Consecutive(n);
-                var vivid = HexColor(categories[i].Hex);
+                var vivid = HexColor(hexes[i]);
                 var fill = plot.Add.FillY(xs, bottom, top);
                 fill.FillColor = vivid.WithAlpha(60);
                 // 带顶 = 本类上边界,鲜艳折线读趋势
                 var line = plot.Add.ScatterLine(xs, top, vivid);
                 line.LineWidth = 1.5f;
-                line.LegendText = categories[i].Name;
                 bottom = top;
             }
 
-            plot.ShowLegend();
-
-            plot.Axes.Bottom.SetTicks(xsOf(n), ToArray(columnNames));   // x=按时间序的周期
-            plot.Axes.Bottom.TickLabelStyle.Rotation = 30;
-            plot.Axes.Bottom.TickLabelStyle.Alignment = Alignment.MiddleRight;
-            plot.Axes.Bottom.MinimumSize = 30;
-            plot.Axes.Bottom.Label.Text = "周期(按时间序)";
-            plot.Axes.Left.Label.Text = percent ? "占比 %" : "金额(元)";
+            // 横轴仅 ASCII 占位(P0…),语义映射由 PDF 文字说明
+            var labels = new string[n];
+            for (int i = 0; i < n; i++) labels[i] = "P" + i;
+            plot.Axes.Bottom.SetTicks(xsOf(n), labels);
             plot.Axes.AutoScale();
-            StyleChinese(plot);   // 字体要在刻度/轴配置之后再设(避免被重置)
             return plot.GetImageBytes(960, 460);
         }
         catch
