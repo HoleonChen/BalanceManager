@@ -224,6 +224,41 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
             throw new Exception("范围合计错误。");
         steps.Add("范围合计 → 作废/转账/期外均正确处理");
 
+        // 月历逐日合计(DayTotalsMap):隔离的一个未来月——同日 收支各一 + 转账一笔 + 次日支出后作废
+        var fmo = DateTime.Today.AddMonths(6);
+        var f1 = new DateTime(fmo.Year, fmo.Month, 1);
+        var mStart = f1.ToString("yyyy-MM-dd");
+        var mEnd = f1.AddMonths(1).AddDays(-1).ToString("yyyy-MM-dd");
+        var md1 = f1.ToString("yyyy-MM-dd");
+        var md2 = f1.AddDays(1).ToString("yyyy-MM-dd");
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = md1, Direction = "out", AccountId = accountB,
+            CategoryId = 1, AmountCents = 2500, Name = "月历支出", Note = "", Channel = "", InPool = false
+        });
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = md1, Direction = "in", AccountId = accountB,
+            CategoryId = 10, AmountCents = 1500, Name = "月历收入", Note = "", Channel = "", InPool = false
+        });
+        Transactions.Transfer(s, new TransferDraft
+        {
+            Date = md1, FromAccountId = accountB, ToAccountId = accountA,
+            PrincipalCents = 120000, DeltaCents = 0, Kind = "互转", Note = "", InPool = false
+        });
+        var toCancel = Transactions.Add(s, new TxnDraft
+        {
+            Date = md2, Direction = "out", AccountId = accountB,
+            CategoryId = 1, AmountCents = 4000, Name = "月历待作废", Note = "", Channel = "", InPool = false
+        });
+        Transactions.Cancel(s, toCancel);
+        var mmap = Transactions.DayTotalsMap(s, mStart, mEnd);
+        if (!mmap.TryGetValue(md1, out var mv1) || mv1.OutCents != 2500 || mv1.InCents != 1500)
+            throw new Exception("月历逐日合计不符(转账不应计入同日收支)。");
+        if (mmap.ContainsKey(md2))
+            throw new Exception("月历逐日合计:作废日不应出现。");
+        steps.Add("月历逐日合计 → 同日收支 + 转账不计入 + 作废日缺席");
+
         // 就地编辑转账:改转出账户/本金与 Δ
         var txEdit = Transactions.GetTransfer(s, tx)
             ?? throw new Exception("读不到待编辑转账。");

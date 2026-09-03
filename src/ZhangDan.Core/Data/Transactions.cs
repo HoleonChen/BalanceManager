@@ -391,6 +391,27 @@ WHERE date BETWEEN $start AND $end AND direction <> 'transfer' AND status <> 'ca
         return (r.GetInt64(0), r.GetInt64(1));
     }
 
+    /// <summary>某日期范围内逐日支出/收入合计(键 yyyy-MM-dd;不含转账、取消)。月历热力用,一次查询免 N+1。</summary>
+    public static IReadOnlyDictionary<string, (long OutCents, long InCents)> DayTotalsMap(
+        LedgerSession s, string startDate, string endDate)
+    {
+        var map = new Dictionary<string, (long, long)>();
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT date,
+  COALESCE(SUM(CASE WHEN direction = 'out' THEN amount_cents ELSE 0 END), 0),
+  COALESCE(SUM(CASE WHEN direction = 'in'  THEN amount_cents ELSE 0 END), 0)
+FROM transactions
+WHERE date BETWEEN $start AND $end AND direction <> 'transfer' AND status <> 'cancelled'
+GROUP BY date;";
+        cmd.Parameters.AddWithValue("$start", startDate);
+        cmd.Parameters.AddWithValue("$end", endDate);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            map[r.GetString(0)] = (r.GetInt64(1), r.GetInt64(2));
+        return map;
+    }
+
     /// <summary>某日支出/收入合计(不含转账、取消)。</summary>
     public static (long OutCents, long InCents) DayTotals(LedgerSession s, string date)
     {
