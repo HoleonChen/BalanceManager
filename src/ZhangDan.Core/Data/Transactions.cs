@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Microsoft.Data.Sqlite;
 
 namespace ZhangDan;
@@ -464,6 +465,114 @@ ORDER BY t.date, t.id;";
                 r.GetString(14),
                 r.IsDBNull(15) ? string.Empty : r.GetString(15),
                 r.IsDBNull(16) ? string.Empty : r.GetString(16)));
+        }
+        return list;
+    }
+
+    /// <summary>流水页筛选条件。</summary>
+    internal sealed class FlowFilter
+    {
+        public long? PeriodId { get; init; }       // 只看某周期(按其归属)
+        public bool UnassignedOnly { get; init; }  // 只看未归属(period_id 为空)
+        public string? Direction { get; init; }    // in | out | transfer | null=全部
+        public long? AccountId { get; init; }
+        public long? CategoryId { get; init; }
+        public bool ShowCancelled { get; init; }   // false 时隐藏已作废
+        public string? Keyword { get; init; }      // 名称/备注/账户名/分类名 模糊
+    }
+
+    /// <summary>流水页展示行:带状态/来源/归属周期名/分类颜色/入池。</summary>
+    internal sealed class FlowListItem
+    {
+        public long Id { get; init; }
+        public required string Direction { get; init; }   // in | out | transfer
+        public long AmountCents { get; init; }
+        public required string Name { get; init; }
+        public required string Account { get; init; }     // 转账=转出账户
+        public required string AccountTo { get; init; }
+        public required string Category { get; init; }
+        public string CategoryColor { get; init; } = "";
+        public string Kind { get; init; } = "";
+        public long DeltaCents { get; init; }
+        public required string Date { get; init; }        // yyyy-MM-dd
+        public required string Time { get; init; }
+        public required string Status { get; init; }      // normal | refunded | cancelled
+        public required string Source { get; init; }      // manual | calibration
+        public string PeriodName { get; init; } = "";
+        public bool InPool { get; init; }
+    }
+
+    /// <summary>流水页通用筛选:周期/未归属/方向/账户/分类/含作废/关键词,按日期倒序。</summary>
+    public static IReadOnlyList<FlowListItem> ListFlows(LedgerSession s, FlowFilter f)
+    {
+        var sql = new StringBuilder(@"
+SELECT t.id, t.direction, t.amount_cents, t.name,
+       COALESCE(a.name, ''), COALESCE(c.name, ''),
+       substr(t.created_at, 12, 5),
+       COALESCE(b.name, ''),
+       COALESCE(t.delta_cents, 0), COALESCE(t.transfer_kind, ''),
+       t.date, t.status, t.source, t.in_pool, COALESCE(p.name, ''), COALESCE(c.color, '')
+FROM transactions t
+LEFT JOIN accounts a   ON a.id  = t.account_id
+LEFT JOIN accounts b   ON b.id  = t.to_account_id
+LEFT JOIN categories c ON c.id  = t.category_id
+LEFT JOIN periods   p ON p.id  = t.period_id
+WHERE 1 = 1");
+
+        if (!f.ShowCancelled)
+            sql.Append(" AND t.status <> 'cancelled'");
+        if (f.PeriodId is long pid)
+            sql.Append(" AND t.period_id = $pid");
+        else if (f.UnassignedOnly)
+            sql.Append(" AND t.period_id IS NULL");
+        if (f.Direction is string dir && dir.Length > 0)
+        {
+            sql.Append(" AND t.direction = $dir");
+        }
+        if (f.AccountId is long acct)
+            sql.Append(" AND (t.account_id = $acct OR t.to_account_id = $acct)");
+        if (f.CategoryId is long cat)
+            sql.Append(" AND t.category_id = $cat");
+        if (!string.IsNullOrWhiteSpace(f.Keyword))
+            sql.Append(" AND (t.name LIKE $kw OR t.note LIKE $kw OR a.name LIKE $kw OR c.name LIKE $kw)");
+        sql.Append(" ORDER BY t.date DESC, t.id DESC;");
+
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = sql.ToString();
+        if (f.PeriodId is long pid2)
+            cmd.Parameters.AddWithValue("$pid", pid2);
+        if (f.Direction is string dir2 && dir2.Length > 0)
+            cmd.Parameters.AddWithValue("$dir", dir2);
+        if (f.AccountId is long acct2)
+            cmd.Parameters.AddWithValue("$acct", acct2);
+        if (f.CategoryId is long cat2)
+            cmd.Parameters.AddWithValue("$cat", cat2);
+        if (!string.IsNullOrWhiteSpace(f.Keyword))
+            cmd.Parameters.AddWithValue("$kw", "%" + f.Keyword.Trim() + "%");
+
+        var list = new List<FlowListItem>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new FlowListItem
+            {
+                Id = r.GetInt64(0),
+                Direction = r.GetString(1),
+                AmountCents = r.GetInt64(2),
+                Name = r.GetString(3),
+                Account = r.GetString(4),
+                Category = r.GetString(5),
+                Time = r.GetString(6),
+                AccountTo = r.GetString(7),
+                DeltaCents = r.GetInt64(8),
+                Kind = r.GetString(9),
+                Date = r.GetString(10),
+                Status = r.GetString(11),
+                Source = r.GetString(12),
+                InPool = r.GetInt32(13) != 0,
+                PeriodName = r.GetString(14),
+                CategoryColor = r.GetString(15)
+            });
         }
         return list;
     }
