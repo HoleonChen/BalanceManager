@@ -110,17 +110,21 @@ internal static class ReportCharts
 
     private static string? _fontName;
 
-    /// <summary>注册一个含中文的字体(Windows 雅黑/黑体),返回可在 FontName 里用的名字;失败回退字符串。</summary>
+    /// <summary>
+    /// 中文字体名固定用系统族名「Microsoft YaHei」,并把 Windows 的 msyh 字体文件注册到该名字下,
+    /// 让「按系统名解析」与「按注册名解析」两条路径都命中同一份含中文字形的字体。失败时仍按名试。
+    /// </summary>
     private static string ChineseFont()
     {
         if (_fontName is not null)
             return _fontName;
+        const string systemName = "Microsoft YaHei";
         string[] candidates =
         {
-            @"C:\Windows\Fonts\msyh.ttc",   // 微软雅黑(常规)
+            @"C:\Windows\Fonts\msyh.ttc",
             @"C:\Windows\Fonts\msyh.ttf",
-            @"C:\Windows\Fonts\msyhbd.ttc", // 微软雅黑(粗)
-            @"C:\Windows\Fonts\simhei.ttf"  // 黑体
+            @"C:\Windows\Fonts\msyhbd.ttc",
+            @"C:\Windows\Fonts\simhei.ttf"
         };
         foreach (var path in candidates)
         {
@@ -128,15 +132,14 @@ internal static class ReportCharts
                 continue;
             try
             {
-                string name = "ZhangDanCjk" + path.GetHashCode();
-                Fonts.AddFontFile(name, path);
-                _fontName = name;
-                return name;
+                Fonts.AddFontFile(systemName, path);
+                _fontName = systemName;
+                return systemName;
             }
             catch { /* 试下一个 */ }
         }
-        _fontName = "Microsoft YaHei";   // 注册不了就按名试(可能仍无字形)
-        return _fontName;
+        _fontName = systemName;
+        return systemName;
     }
 
     private static void StyleChinese(Plot plot)
