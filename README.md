@@ -73,9 +73,10 @@ dotnet publish src/ZhangDan.App -c Release -r win-x64 --self-contained true -o p
 
 ## 📄 许可与致谢
 
-- 本仓库代码以 **MIT** 许可发布(见 [`LICENSE`](LICENSE));个人使用、朋友间使用、二次分发均可。
-- 提醒:程序内嵌的**第三方组件各自保留其许可**——尤其 **QuestPDF** 采用 Community 许可(年收入 < $1M / 非商用免费,PDF 页脚水印即其 Community 标识)。自用与朋友自用没问题;若你或朋友用于**商用(且超免费门槛)**,请按 QuestPDF 许可升级处理。
-- ClosedXML / ScottPlot / WPF-UI —— MIT;SQLite(公有领域)+ SQLCipher(BSD 风格)。
+- 本仓库代码以 **MIT** 许可发布(见 [`LICENSE`](LICENSE))。
+- 第三方组件各自保留其许可:
+  - **QuestPDF**:使用其 Community 版生成 PDF,遵循 QuestPDF 自身许可(非商用 / 年收入 < $1M 的组织免费;产物页脚含水印即其 Community 标识)。是否满足该许可由使用方按自身情况确认。
+  - ClosedXML / ScottPlot / WPF-UI —— MIT;SQLite(公有领域)+ SQLCipher(BSD 风格)。
 
 > 设计与数据导入规范、Windows 构建细节、验收清单见仓库内 `设计文档.md`、`WINDOWS_BUILD.md`、`tools/zd-import/SPEC.md`。
 
