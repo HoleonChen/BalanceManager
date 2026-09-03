@@ -1,0 +1,31 @@
+{
+  "_notes": "账本数据规范最小示例(结构见同目录 SPEC.md)。金额一律「元」;引用按名称;周期先建、流水按日期自动归属;真实历史导入请按 SPEC 另产出。",
+  "ledgerName": "示例账本",
+  "accounts": [
+    { "name": "微信零钱", "type": "wallet", "platform": "微信", "balanceBase": 320.0, "balanceDate": "2026-06-01" },
+    { "name": "银行卡", "type": "bank", "platform": "银行", "balanceBase": 5000.0, "balanceDate": "2026-06-01" },
+    { "name": "零钱通", "type": "money_fund", "platform": "微信", "balanceBase": 200.0, "balanceDate": "2026-06-01" }
+  ],
+  "categories": [
+    { "name": "餐饮", "kind": "expense", "color": "#F06292" },
+    { "name": "交通", "kind": "expense", "color": "#42A5F5" },
+    { "name": "购物", "kind": "expense", "color": "#FFA726" },
+    { "name": "其他", "kind": "expense", "color": "#9E9E9E" },
+    { "name": "生活费", "kind": "income" },
+    { "name": "理财收益", "kind": "income" }
+  ],
+  "periods": [
+    { "name": "六月生活费", "startDate": "2026-06-01", "endDate": "2026-06-30" }
+  ],
+  "fundPools": [
+    { "period": "六月生活费", "account": "微信零钱", "name": "生活费", "budget": 800.0, "reserve": 100.0 }
+  ],
+  "transactions": [
+    { "date": "2026-06-01", "direction": "in", "name": "初始生活费", "category": "生活费", "account": "微信零钱", "amount": 800.0, "inPool": false, "note": "月初转入生活费" },
+    { "date": "2026-06-02", "direction": "out", "name": "早餐", "category": "餐饮", "account": "微信零钱", "amount": 12.5, "time": "08:05", "channel": "实体" },
+    { "date": "2026-06-02", "direction": "transfer", "name": "零钱转零钱通", "account": "微信零钱", "toAccount": "零钱通", "amount": 100.0, "transferKind": "互转", "inPool": false },
+    { "date": "2026-06-10", "direction": "out", "name": "地铁", "category": "交通", "account": "银行卡", "amount": 4.0 },
+    { "date": "2026-06-20", "direction": "in", "name": "零钱通收益", "category": "理财收益", "account": "零钱通", "amount": 1.23 },
+    { "date": "2026-06-25", "direction": "out", "name": "网购日用品", "category": "购物", "account": "银行卡", "amount": 99.0, "source": "legacy", "refId": "legacy-0001", "note": "早期手工账迁移示例" }
+  ]
+}

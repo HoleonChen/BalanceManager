@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    账本「密封器」:独立 CLI(不属于应用本体),读数据规范 JSON → 用与主程序同款
+    SQLCipher(e_sqlcipher)建 .lbook。可在 mac / Windows 运行,供 Python 脚本调用。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>ZhangDan.Sealer</AssemblyName>
+    <RollForward>LatestMajor</RollForward>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ZhangDan.Core\ZhangDan.Core.csproj" />
+  </ItemGroup>
+
+</Project>
