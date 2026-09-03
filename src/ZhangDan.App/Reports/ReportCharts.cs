@@ -59,7 +59,6 @@ internal static class ReportCharts
             }
 
             plot.ShowLegend();
-            StyleChinese(plot);
 
             plot.Axes.Bottom.SetTicks(xsOf(n), ToArray(columnNames));   // x=按时间序的周期
             plot.Axes.Bottom.TickLabelStyle.Rotation = 30;
@@ -68,6 +67,7 @@ internal static class ReportCharts
             plot.Axes.Bottom.Label.Text = "周期(按时间序)";
             plot.Axes.Left.Label.Text = percent ? "占比 %" : "金额(元)";
             plot.Axes.AutoScale();
+            StyleChinese(plot);   // 字体要在刻度/轴配置之后再设(避免被重置)
             return plot.GetImageBytes(960, 460);
         }
         catch
