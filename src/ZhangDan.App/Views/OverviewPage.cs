@@ -6,6 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using ZhangDan.App.Dialogs;
 
+using WListView = Wpf.Ui.Controls.ListView;
+using WGridView = Wpf.Ui.Controls.GridView;
+using WGridViewColumn = Wpf.Ui.Controls.GridViewColumn;
 namespace ZhangDan.App.Views;
 
 /// <summary>总览页(排第一,吸收今日记账):摘要带(周期/资金池/净资产)+ 选定日流水(记/转/双击编辑/作废)+ 右侧自然月月历。</summary>
@@ -22,7 +25,7 @@ internal sealed class OverviewPage : PageBase
     private readonly TextBlock _monthSummary = new() { Margin = new Thickness(0, 6, 0, 0) };
     private readonly Border _summaryBand = new() { Padding = new Thickness(12, 8, 12, 8), BorderThickness = new Thickness(0, 0, 0, 1) };
     private readonly StackPanel _bandContent = new();
-    private readonly ListView _list = new();
+    private readonly WListView _list = new();
     private readonly MonthCalendar _calendar = new();
 
     public OverviewPage()
@@ -119,14 +122,14 @@ internal sealed class OverviewPage : PageBase
         Content = root;
     }
 
-    private static GridView BuildColumns()
+    private static WGridView BuildColumns()
     {
-        var gv = new GridView();
-        gv.Columns.Add(new GridViewColumn { Header = "时间", Width = 60, DisplayMemberBinding = Bind("Time") });
-        gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 165, DisplayMemberBinding = Bind("Name") });
-        gv.Columns.Add(new GridViewColumn { Header = "分类", Width = 95, DisplayMemberBinding = Bind("Category") });
-        gv.Columns.Add(new GridViewColumn { Header = "账户", Width = 150, DisplayMemberBinding = Bind("Account") });
-        gv.Columns.Add(new GridViewColumn { Header = "金额", Width = 120, DisplayMemberBinding = Bind("Amount") });
+        var gv = new WGridView();
+        gv.Columns.Add(new WGridViewColumn { Header = "时间", Width = 60, DisplayMemberBinding = Bind("Time") });
+        gv.Columns.Add(new WGridViewColumn { Header = "名称", Width = 165, DisplayMemberBinding = Bind("Name") });
+        gv.Columns.Add(new WGridViewColumn { Header = "分类", Width = 95, DisplayMemberBinding = Bind("Category") });
+        gv.Columns.Add(new WGridViewColumn { Header = "账户", Width = 150, DisplayMemberBinding = Bind("Account") });
+        gv.Columns.Add(new WGridViewColumn { Header = "金额", Width = 120, DisplayMemberBinding = Bind("Amount") });
         return gv;
     }
 

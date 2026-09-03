@@ -5,6 +5,9 @@ using System.Windows;
 using System.Windows.Controls;
 using ZhangDan.App.Dialogs;
 
+using WListView = Wpf.Ui.Controls.ListView;
+using WGridView = Wpf.Ui.Controls.GridView;
+using WGridViewColumn = Wpf.Ui.Controls.GridViewColumn;
 namespace ZhangDan.App.Views;
 
 /// <summary>
@@ -374,14 +377,14 @@ internal sealed class FlowPage : PageBase
         };
         header.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Accent);
 
-        var list = new ListView { ItemsSource = dayRows, SelectionMode = SelectionMode.Single };
-        var gv = new GridView();
-        gv.Columns.Add(new GridViewColumn { Header = "时间", Width = 62, DisplayMemberBinding = Bind("Time") });
-        gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 190, DisplayMemberBinding = Bind("Name") });
-        gv.Columns.Add(new GridViewColumn { Header = "分类", Width = 108, DisplayMemberBinding = Bind("Category") });
-        gv.Columns.Add(new GridViewColumn { Header = "账户", Width = 210, DisplayMemberBinding = Bind("Account") });
-        gv.Columns.Add(new GridViewColumn { Header = "金额", Width = 130, DisplayMemberBinding = Bind("Amount") });
-        gv.Columns.Add(new GridViewColumn { Header = "标注", Width = 76, DisplayMemberBinding = Bind("Tag") });
+        var list = new WListView { ItemsSource = dayRows, SelectionMode = SelectionMode.Single };
+        var gv = new WGridView();
+        gv.Columns.Add(new WGridViewColumn { Header = "时间", Width = 62, DisplayMemberBinding = Bind("Time") });
+        gv.Columns.Add(new WGridViewColumn { Header = "名称", Width = 190, DisplayMemberBinding = Bind("Name") });
+        gv.Columns.Add(new WGridViewColumn { Header = "分类", Width = 108, DisplayMemberBinding = Bind("Category") });
+        gv.Columns.Add(new WGridViewColumn { Header = "账户", Width = 210, DisplayMemberBinding = Bind("Account") });
+        gv.Columns.Add(new WGridViewColumn { Header = "金额", Width = 130, DisplayMemberBinding = Bind("Amount") });
+        gv.Columns.Add(new WGridViewColumn { Header = "标注", Width = 76, DisplayMemberBinding = Bind("Tag") });
         list.View = gv;
         list.MouseDoubleClick += (_, _) => EditRow(list.SelectedItem as Row);
         list.ContextMenu = RowMenu(list);
@@ -399,7 +402,7 @@ internal sealed class FlowPage : PageBase
         return wrap;
     }
 
-    private ContextMenu RowMenu(ListView list)
+    private ContextMenu RowMenu(WListView list)
     {
         var menu = new ContextMenu();
         var edit = new MenuItem { Header = "编辑…" };

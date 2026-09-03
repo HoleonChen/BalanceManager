@@ -5,7 +5,8 @@
         Height="780" Width="1200"
         MinHeight="620" MinWidth="1000"
         WindowStartupLocation="CenterScreen"
-        FontFamily="Microsoft YaHei UI">
+        FontFamily="Microsoft YaHei UI"
+        TextElement.Foreground="{DynamicResource TextPrimary}">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="216"/>

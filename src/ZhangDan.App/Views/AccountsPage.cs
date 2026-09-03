@@ -4,6 +4,9 @@ using System.Windows;
 using System.Windows.Controls;
 using ZhangDan.App.Dialogs;
 
+using WListView = Wpf.Ui.Controls.ListView;
+using WGridView = Wpf.Ui.Controls.GridView;
+using WGridViewColumn = Wpf.Ui.Controls.GridViewColumn;
 namespace ZhangDan.App.Views;
 
 /// <summary>账户:列表 + 净资产合计 + 选中账户详情(余额构成/本周期变动/校准历史);可新建/停用/校准。</summary>
@@ -15,7 +18,7 @@ internal sealed class AccountsPage : PageBase
     public Action<long>? ViewAccountFlows { get; set; }
 
     private readonly TextBlock _summary = new() { FontWeight = FontWeights.SemiBold, FontSize = 15, Margin = new Thickness(4, 0, 0, 0) };
-    private readonly ListView _list = new();
+    private readonly WListView _list = new();
     private readonly Border _detail = new();
     private readonly StackPanel _detailBody = new();
     private long? _selectedId;
@@ -72,12 +75,12 @@ internal sealed class AccountsPage : PageBase
         menu.Items.Add(mEnable);
         _list.ContextMenu = menu;
 
-        var gv = new GridView();
-        gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 200, DisplayMemberBinding = Bind("Name") });
-        gv.Columns.Add(new GridViewColumn { Header = "类型", Width = 150, DisplayMemberBinding = Bind("Type") });
-        gv.Columns.Add(new GridViewColumn { Header = "状态", Width = 90, DisplayMemberBinding = Bind("Status") });
-        gv.Columns.Add(new GridViewColumn { Header = "平台", Width = 110, DisplayMemberBinding = Bind("Platform") });
-        gv.Columns.Add(new GridViewColumn { Header = "当前余额(派生)", Width = 140, DisplayMemberBinding = Bind("Balance") });
+        var gv = new WGridView();
+        gv.Columns.Add(new WGridViewColumn { Header = "名称", Width = 200, DisplayMemberBinding = Bind("Name") });
+        gv.Columns.Add(new WGridViewColumn { Header = "类型", Width = 150, DisplayMemberBinding = Bind("Type") });
+        gv.Columns.Add(new WGridViewColumn { Header = "状态", Width = 90, DisplayMemberBinding = Bind("Status") });
+        gv.Columns.Add(new WGridViewColumn { Header = "平台", Width = 110, DisplayMemberBinding = Bind("Platform") });
+        gv.Columns.Add(new WGridViewColumn { Header = "当前余额(派生)", Width = 140, DisplayMemberBinding = Bind("Balance") });
         _list.View = gv;
         _list.ItemContainerStyle = DisabledRowStyle();
         _list.Margin = new Thickness(20, 0, 20, 12);
@@ -421,14 +424,14 @@ internal sealed class AccountsPage : PageBase
     /// <summary>校准历史表(只读)。</summary>
     private static UIElement BuildHistory(IReadOnlyList<CalibrationEntry> entries)
     {
-        var lv = new ListView { MaxHeight = 150 };
-        var gv = new GridView();
-        gv.Columns.Add(new GridViewColumn { Header = "时间", Width = 126, DisplayMemberBinding = Bind("When") });
-        gv.Columns.Add(new GridViewColumn { Header = "账面", Width = 78, DisplayMemberBinding = Bind("Book") });
-        gv.Columns.Add(new GridViewColumn { Header = "实际", Width = 78, DisplayMemberBinding = Bind("Actual") });
-        gv.Columns.Add(new GridViewColumn { Header = "差额", Width = 88, DisplayMemberBinding = Bind("Diff") });
-        gv.Columns.Add(new GridViewColumn { Header = "方式", Width = 120, DisplayMemberBinding = Bind("Method") });
-        gv.Columns.Add(new GridViewColumn { Header = "备注", Width = 200, DisplayMemberBinding = Bind("Note") });
+        var lv = new WListView { MaxHeight = 150 };
+        var gv = new WGridView();
+        gv.Columns.Add(new WGridViewColumn { Header = "时间", Width = 126, DisplayMemberBinding = Bind("When") });
+        gv.Columns.Add(new WGridViewColumn { Header = "账面", Width = 78, DisplayMemberBinding = Bind("Book") });
+        gv.Columns.Add(new WGridViewColumn { Header = "实际", Width = 78, DisplayMemberBinding = Bind("Actual") });
+        gv.Columns.Add(new WGridViewColumn { Header = "差额", Width = 88, DisplayMemberBinding = Bind("Diff") });
+        gv.Columns.Add(new WGridViewColumn { Header = "方式", Width = 120, DisplayMemberBinding = Bind("Method") });
+        gv.Columns.Add(new WGridViewColumn { Header = "备注", Width = 200, DisplayMemberBinding = Bind("Note") });
         lv.View = gv;
         var rows = new List<HistoryRow>();
         foreach (var e in entries)

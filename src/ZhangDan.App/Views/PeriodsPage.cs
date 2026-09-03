@@ -5,13 +5,16 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using ZhangDan.App.Dialogs;
 
+using WListView = Wpf.Ui.Controls.ListView;
+using WGridView = Wpf.Ui.Controls.GridView;
+using WGridViewColumn = Wpf.Ui.Controls.GridViewColumn;
 namespace ZhangDan.App.Views;
 
 /// <summary>周期:列表 + 新建/封存/解除封存(查看流水等后续)。</summary>
 internal sealed class PeriodsPage : PageBase
 {
     private LedgerSession S => App.Ledger!;
-    private readonly ListView _list = new();
+    private readonly WListView _list = new();
 
     private sealed class Row
     {
@@ -53,10 +56,10 @@ internal sealed class PeriodsPage : PageBase
         menu.Items.Add(mUnseal);
         _list.ContextMenu = menu;
 
-        var gv = new GridView();
-        gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 180, DisplayMemberBinding = Bind("Name") });
-        gv.Columns.Add(new GridViewColumn { Header = "起止", Width = 230, DisplayMemberBinding = Bind("Range") });
-        gv.Columns.Add(new GridViewColumn { Header = "状态", Width = 130, DisplayMemberBinding = Bind("Status") });
+        var gv = new WGridView();
+        gv.Columns.Add(new WGridViewColumn { Header = "名称", Width = 180, DisplayMemberBinding = Bind("Name") });
+        gv.Columns.Add(new WGridViewColumn { Header = "起止", Width = 230, DisplayMemberBinding = Bind("Range") });
+        gv.Columns.Add(new WGridViewColumn { Header = "状态", Width = 130, DisplayMemberBinding = Bind("Status") });
         _list.View = gv;
         _list.Margin = new Thickness(20, 0, 20, 12);
         _list.SelectionMode = SelectionMode.Single;

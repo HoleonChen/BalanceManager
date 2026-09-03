@@ -5,6 +5,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 
+using WListView = Wpf.Ui.Controls.ListView;
+using WGridView = Wpf.Ui.Controls.GridView;
+using WGridViewColumn = Wpf.Ui.Controls.GridViewColumn;
 namespace ZhangDan.App.Views;
 
 /// <summary>分类管理:支出/收入切换;新建、删除(用中禁止删)。</summary>
@@ -13,7 +16,7 @@ internal sealed class CategoriesPage : PageBase
     private LedgerSession S => App.Ledger!;
     private readonly RadioButton _outRadio = new() { Content = "支出分类", IsChecked = true };
     private readonly RadioButton _inRadio = new() { Content = "收入分类", Margin = new Thickness(14, 0, 0, 0) };
-    private readonly ListView _list = new();
+    private readonly WListView _list = new();
 
     private sealed class Row
     {
@@ -85,11 +88,11 @@ internal sealed class CategoriesPage : PageBase
         menu.Items.Add(mDel);
         _list.ContextMenu = menu;
 
-        var gv = new GridView();
-        gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 180, DisplayMemberBinding = Bind("Name") });
-        gv.Columns.Add(new GridViewColumn { Header = "颜色", Width = 96, CellTemplate = SwatchTemplate() });
-        gv.Columns.Add(new GridViewColumn { Header = "使用", Width = 80, DisplayMemberBinding = Bind("Used") });
-        gv.Columns.Add(new GridViewColumn { Header = "关键词(导入归类)", Width = 200, DisplayMemberBinding = Bind("Keyword") });
+        var gv = new WGridView();
+        gv.Columns.Add(new WGridViewColumn { Header = "名称", Width = 180, DisplayMemberBinding = Bind("Name") });
+        gv.Columns.Add(new WGridViewColumn { Header = "颜色", Width = 96, CellTemplate = SwatchTemplate() });
+        gv.Columns.Add(new WGridViewColumn { Header = "使用", Width = 80, DisplayMemberBinding = Bind("Used") });
+        gv.Columns.Add(new WGridViewColumn { Header = "关键词(导入归类)", Width = 200, DisplayMemberBinding = Bind("Keyword") });
         _list.View = gv;
         _list.Margin = new Thickness(20, 0, 20, 12);
         _list.SelectionMode = SelectionMode.Single;
