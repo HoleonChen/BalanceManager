@@ -4,13 +4,18 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Navigation;
 using ZhangDan;
 
 namespace ZhangDan.App.Views;
 
-/// <summary>设置 →「关于账单管理」子页:版本/运行环境/数据位置/第三方许可/隐私口令说明。</summary>
+/// <summary>设置 →「关于账单管理」子页:作者/版本/运行环境/数据位置/第三方许可/隐私口令说明。</summary>
 internal sealed class AboutSubView : UserControl
 {
+    /// <summary>作者 GitHub 主页(如与这里不同,改这一处即可)。</summary>
+    private const string GitHubUrl = "https://github.com/HoleonChen";
+
     private readonly Action _back;
 
     public AboutSubView(Action back)
@@ -18,6 +23,13 @@ internal sealed class AboutSubView : UserControl
         _back = back;
         var panel = new StackPanel { Margin = new Thickness(24, 16, 24, 16), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Title("关于"));
+
+        panel.Children.Add(Section("作者"));
+        var author = new TextBlock { FontSize = 13, Margin = new Thickness(0, 0, 0, 2) };
+        author.Inlines.Add(new Run("HoleonChen"));
+        author.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextPrimary);
+        panel.Children.Add(author);
+        panel.Children.Add(LinkRow("GitHub:", GitHubUrl));
 
         panel.Children.Add(Section("版本"));
         panel.Children.Add(Info(VersionText));
@@ -81,6 +93,31 @@ internal sealed class AboutSubView : UserControl
         var t = new TextBlock { Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = margin };
         t.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
         return t;
+    }
+
+    private static UIElement LinkRow(string label, string url)
+    {
+        var text = new TextBlock();
+        text.Inlines.Add(new Run(label + " "));
+        var hyper = new Hyperlink(new Run(url)) { NavigateUri = new Uri(url) };
+        hyper.RequestNavigate += (_, e) => OpenLink(e.Uri?.ToString() ?? url);
+        text.Inlines.Add(hyper);
+        var dock = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+        dock.Children.Add(text);
+        return dock;
+    }
+
+    private static void OpenLink(string url)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "打开链接");
+        }
     }
 
     private UIElement LocationRow(string label, string dir)
