@@ -23,6 +23,10 @@
   <ItemGroup>
     <!-- Fluent 风格控件库(Windows 11 观感) -->
     <PackageReference Include="WPF-UI" Version="3.0.5" />
+    <!-- 报表:PDF(QuestPDF Community)/Excel(ClosedXML)/图表(ScottPlot 出 PNG) -->
+    <PackageReference Include="QuestPDF" Version="2025.12.4" />
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <PackageReference Include="ScottPlot" Version="5.0.56" />
   </ItemGroup>
 
 </Project>
