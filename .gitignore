@@ -4,6 +4,7 @@ obj/
 publish/
 *.user
 .vs/
+.claude/
 
 # ---- 用户数据(不入库)----
 # 账本文件(加密 SQLite,后缀 .lbook)与临时数据库
