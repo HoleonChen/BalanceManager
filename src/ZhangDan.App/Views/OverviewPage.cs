@@ -341,7 +341,15 @@ internal sealed class OverviewPage : PageBase
     {
         var dlg = new RecordDialog(S, defaultDate: _viewDate.Date, settings: App.Settings);
         if (dlg.ShowDialog() != true)
+        {
+            // 「保存并记下一笔」在对话框内部已保存若干笔:取消/关闭后也要刷新,并翻到最近保存的日期
+            if (dlg.SavedCount > 0)
+            {
+                _viewDate = DateTime.Parse(dlg.LastSavedDate);
+                RefreshAll();
+            }
             return;
+        }
         try
         {
             Transactions.Add(S, new TxnDraft

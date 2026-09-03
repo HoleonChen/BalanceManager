@@ -39,6 +39,12 @@ internal sealed class RecordDialog : Window
     public string Note => _noteBox.Text.Trim();
     public bool InPool => _poolCheck.IsChecked == true;
 
+    /// <summary>「保存并记下一笔」已内部保存的笔数;调用方在对话框关闭后据它判断是否刷新列表。</summary>
+    public int SavedCount { get; private set; }
+
+    /// <summary>最近一次内部保存所用日期(yyyy-MM-dd);批量录入后把页面翻到该日。</summary>
+    public string LastSavedDate { get; private set; } = "";
+
     public RecordDialog(LedgerSession ledger, DateTime defaultDate, AppSettings settings,
         TxnEditable? edit = null,
         long? presetAccountId = null, long? presetCategoryId = null, long? presetAmountCents = null)
@@ -105,6 +111,20 @@ internal sealed class RecordDialog : Window
         ok.Click += (_, _) => TryAccept();
         var cancel = new Button { Content = "取消", Width = 96, Height = 34, IsCancel = true };
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+        if (edit is null)
+        {
+            // 批量录入(晚间整理一天账目):保存当前一笔、留在对话框继续录下一笔
+            var next = new Button
+            {
+                Content = "保存并记下一笔",
+                Width = 150,
+                Height = 34,
+                Margin = new Thickness(0, 0, 10, 0),
+                ToolTip = "保存这笔后清空金额/名称,继续录下一笔(日期/账户/分类沿用)——适合晚间一次性整理全天账目"
+            };
+            next.Click += (_, _) => SaveAndRecordNext();
+            row.Children.Add(next);
+        }
         row.Children.Add(ok);
         row.Children.Add(cancel);
 
@@ -179,33 +199,76 @@ internal sealed class RecordDialog : Window
 
     private void TryAccept()
     {
+        if (Validate())
+            DialogResult = true;
+    }
+
+    /// <summary>校验当前字段;通过则写入 AmountCents。失败在 _error 提示并返回 false。</summary>
+    private bool Validate()
+    {
+        _error.Foreground = System.Windows.Media.Brushes.Firebrick;
         if (_datePicker.SelectedDate is null)
         {
             _error.Text = "请选择日期。";
-            return;
+            return false;
         }
         if (_accountBox.SelectedItem is not AccountRow)
         {
             _error.Text = "请先新建一个账户(工具 → 账户)。";
-            return;
+            return false;
         }
         if (!ParseMoney(_amountBox.Text, out var yuan) || yuan <= 0)
         {
             _error.Text = "金额请填大于 0 的数字(元)。";
-            return;
+            return false;
         }
         if (TxnName.Length == 0)
         {
             _error.Text = "请填写名称(如「早餐」)。";
-            return;
+            return false;
         }
         if (_categoryBox.SelectedItem is not CategoryRow)
         {
             _error.Text = "请选择分类。";
-            return;
+            return false;
         }
         AmountCents = Money.ToCents(yuan);
-        DialogResult = true;
+        return true;
+    }
+
+    /// <summary>保存当前一笔并留在对话框录下一笔(晚间批量整理):日期/账户/分类沿用,金额/名称/渠道/备注清空。</summary>
+    private void SaveAndRecordNext()
+    {
+        if (!Validate())
+            return;
+        try
+        {
+            Transactions.Add(_ledger, new TxnDraft
+            {
+                Date = DateStr,
+                Direction = Direction,
+                AccountId = AccountId,
+                CategoryId = CategoryId,
+                AmountCents = AmountCents,
+                Name = TxnName,
+                Channel = Channel,
+                Note = Note,
+                InPool = InPool
+            });
+            SavedCount++;
+            LastSavedDate = DateStr;
+            _amountBox.Text = "";
+            _nameBox.Clear();
+            _channelBox.Text = "";
+            _noteBox.Clear();
+            _error.Foreground = System.Windows.Media.Brushes.SeaGreen;
+            _error.Text = $"已保存 {SavedCount} 笔 —— 日期/账户/分类沿用,可直接录下一笔;可随时改。";
+        }
+        catch (Exception ex)
+        {
+            _error.Foreground = System.Windows.Media.Brushes.Firebrick;
+            _error.Text = $"保存失败:{ex.Message}";
+        }
     }
 
     private static bool ParseMoney(string text, out decimal yuan)
