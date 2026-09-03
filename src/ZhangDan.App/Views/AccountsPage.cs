@@ -16,9 +16,10 @@ internal sealed class AccountsPage : PageBase
     private sealed class Row
     {
         public required AccountRow A { get; init; }
-        public string Name => A.Enabled ? A.Name : A.Name + "(已停用)";
+        public string Name => A.Name;
         public string Type => TypeLabel(A.Type);
         public string Platform => A.Platform.Length == 0 ? "—" : A.Platform;
+        public string Status => A.Enabled ? "启用" : "停用";
         public string Balance => Money.Yuan(AccountCalibration.BookCents(App.Ledger!, A.Id));
     }
 
@@ -64,9 +65,11 @@ internal sealed class AccountsPage : PageBase
         var gv = new GridView();
         gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 200, DisplayMemberBinding = Bind("Name") });
         gv.Columns.Add(new GridViewColumn { Header = "类型", Width = 150, DisplayMemberBinding = Bind("Type") });
+        gv.Columns.Add(new GridViewColumn { Header = "状态", Width = 90, DisplayMemberBinding = Bind("Status") });
         gv.Columns.Add(new GridViewColumn { Header = "平台", Width = 110, DisplayMemberBinding = Bind("Platform") });
         gv.Columns.Add(new GridViewColumn { Header = "当前余额(派生)", Width = 140, DisplayMemberBinding = Bind("Balance") });
         _list.View = gv;
+        _list.ItemContainerStyle = DisabledRowStyle();
         _list.Margin = new Thickness(20, 0, 20, 12);
         _list.SelectionMode = SelectionMode.Single;
         _list.MouseDoubleClick += (_, _) => Toggle(!(Selected()?.A.Enabled ?? true));
@@ -82,6 +85,17 @@ internal sealed class AccountsPage : PageBase
     }
 
     private static System.Windows.Data.Binding Bind(string p) => new(p) { Mode = System.Windows.Data.BindingMode.OneWay };
+
+    /// <summary>停用账户行灰显(整行降透明度+灰字),启用行保持正常。</summary>
+    private static Style DisabledRowStyle()
+    {
+        var s = new Style(typeof(ListViewItem));
+        var off = new DataTrigger { Binding = new System.Windows.Data.Binding("A.Enabled"), Value = false };
+        off.Setters.Add(new Setter(Control.ForegroundProperty, SystemColors.GrayTextBrush));
+        off.Setters.Add(new Setter(Control.OpacityProperty, 0.65));
+        s.Triggers.Add(off);
+        return s;
+    }
 
     public override void OnShown() => Reload();
 
