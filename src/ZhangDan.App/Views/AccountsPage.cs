@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using ZhangDan.App.Dialogs;
 
@@ -83,10 +84,9 @@ internal sealed class AccountsPage : PageBase
         gv.Columns.Add(new WGridViewColumn { Header = "平台", Width = 110, DisplayMemberBinding = Bind("Platform") });
         gv.Columns.Add(new WGridViewColumn { Header = "当前余额(派生)", Width = 140, DisplayMemberBinding = Bind("Balance") });
         _list.View = gv;
-        _list.ItemContainerStyle = RowItemStyle();
         _list.Margin = new Thickness(20, 0, 20, 12);
-        _list.SelectionMode = SelectionMode.Single;
-        _list.MouseDoubleClick += (_, _) => Toggle(!(Selected()?.A.Enabled ?? true));
+        _list.SelectionMode = SelectionMode.Extended;
+        _list.MouseDoubleClick += (_, e) => RowDoubleToggle(e);
 
         _list.SelectionChanged += (_, _) => ShowDetail(Selected());
 
@@ -117,25 +117,7 @@ internal sealed class AccountsPage : PageBase
 
     private static System.Windows.Data.Binding Bind(string p) => new(p) { Mode = System.Windows.Data.BindingMode.OneWay };
 
-    /// <summary>账户行样式:启用/停用都带主题文字前景(停用整行降透明度即灰显,启用正常)。</summary>
-    private static Style RowItemStyle()
-    {
-        var s = new Style(typeof(ListViewItem));
-        var off = new DataTrigger { Binding = new System.Windows.Data.Binding("A.Enabled"), Value = false };
-        off.Setters.Add(new Setter(Control.OpacityProperty, 0.65));
-        s.Triggers.Add(off);
-        // 行项前景:烘焙当前主题主文字(此表自定义了 ItemContainerStyle,会顶掉 WPF-UI 行项默认前景,
-        // 必须显式给,否则深色下仍是黑字);OnShown 每次切回重设 → 深浅切换后再进入即用新色。
-        if (Application.Current.FindResource(UiKeys.TextPrimary) is Brush fg)
-            s.Setters.Add(new Setter(Control.ForegroundProperty, fg));
-        return s;
-    }
-
-    public override void OnShown()
-    {
-        _list.ItemContainerStyle = RowItemStyle();
-        Reload();
-    }
+    public override void OnShown() => Reload();
 
     private Row? Selected() => _list.SelectedItem as Row;
 
@@ -160,12 +142,44 @@ internal sealed class AccountsPage : PageBase
         _summary.Text = $"净资产合计(启用账户):{Money.Yuan(Accounts.NetAssets(S))}";
     }
 
+    /// <summary>批量启用/停用「所选」账户;停用需一次确认。无选中则空操作。</summary>
     private void Toggle(bool enable)
     {
-        var row = Selected();
-        if (row is null)
+        var rows = _list.SelectedItems.OfType<Row>().ToList();
+        if (rows.Count == 0)
             return;
-        ToggleEnable(row.A.Id, enable);
+        if (!enable)
+        {
+            var preview = string.Join("、", rows.Take(3).Select(r => r.A.Name));
+            if (rows.Count > 3) preview += $" 等 {rows.Count} 个";
+            if (MessageBox.Show($"停用所选 {rows.Count} 个账户: {preview}?\n\n停用后不再出现在记账/转账下拉;已记流水保留。",
+                    "停用账户", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+                return;
+        }
+        foreach (var r in rows)
+        {
+            if (enable) Accounts.Enable(S, r.A.Id);
+            else Accounts.Disable(S, r.A.Id);
+        }
+        Reload();
+    }
+
+    /// <summary>双击某一账户行 → 只切换该账户(与批量选择互不影响)。</summary>
+    private void RowDoubleToggle(MouseButtonEventArgs e)
+    {
+        if (FindAncestor<ListViewItem>(e.OriginalSource as DependencyObject) is { DataContext: Row r })
+            ToggleEnable(r.A.Id, !r.A.Enabled);
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? o) where T : DependencyObject
+    {
+        while (o is not null)
+        {
+            if (o is T t)
+                return t;
+            o = VisualTreeHelper.GetParent(o);
+        }
+        return null;
     }
 
     private void ToggleEnable(long id, bool enable)

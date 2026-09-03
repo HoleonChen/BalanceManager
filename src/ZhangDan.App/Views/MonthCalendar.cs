@@ -19,7 +19,7 @@ internal sealed class MonthCalendar : UserControl
     private const double CellHeight = 48;
     private static readonly string[] Weekdays = { "一", "二", "三", "四", "五", "六", "日" };
 
-    private readonly TextBlock _title = new() { FontSize = 15, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, MinWidth = 120, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _title = new() { FontSize = 15, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly Grid _grid = new();
     private IReadOnlyDictionary<string, (long OutCents, long InCents)> _money = new Dictionary<string, (long, long)>();
 
@@ -31,15 +31,21 @@ internal sealed class MonthCalendar : UserControl
 
     public MonthCalendar()
     {
-        // 标题行:‹ 2026年9月 ›
+        // 标题行:‹ 2026年9月 ›(‹/› 等宽,标题居中于整个月历宽度)
         var prev = new Button { Content = "‹", Width = 30, Height = 26, Margin = new Thickness(0, 0, 6, 0) };
         prev.Click += (_, _) => MonthStep?.Invoke(-1);
         var next = new Button { Content = "›", Width = 30, Height = 26, Margin = new Thickness(6, 0, 0, 0) };
         next.Click += (_, _) => MonthStep?.Invoke(1);
-        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 6) };
-        titleRow.Children.Add(prev);
-        titleRow.Children.Add(_title);
-        titleRow.Children.Add(next);
+        var header = new Grid { Margin = new Thickness(0, 2, 0, 6) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(prev);
+        Grid.SetColumn(prev, 0);
+        header.Children.Add(_title);
+        Grid.SetColumn(_title, 1);
+        header.Children.Add(next);
+        Grid.SetColumn(next, 2);
 
         // 星期头(周一为首列)
         var headRow = new Grid { Margin = new Thickness(0, 0, 0, 2) };
@@ -59,7 +65,7 @@ internal sealed class MonthCalendar : UserControl
             _grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(CellHeight) });
 
         var panel = new StackPanel();
-        panel.Children.Add(titleRow);
+        panel.Children.Add(header);
         panel.Children.Add(headRow);
         panel.Children.Add(_grid);
         Content = panel;

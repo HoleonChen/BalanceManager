@@ -62,7 +62,7 @@ internal sealed class PeriodsPage : PageBase
         gv.Columns.Add(new WGridViewColumn { Header = "状态", Width = 130, DisplayMemberBinding = Bind("Status") });
         _list.View = gv;
         _list.Margin = new Thickness(20, 0, 20, 12);
-        _list.SelectionMode = SelectionMode.Single;
+        _list.SelectionMode = SelectionMode.Extended;
 
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -153,30 +153,44 @@ internal sealed class PeriodsPage : PageBase
         }
     }
 
+    /// <summary>批量封存所选周期:跳过已封存/无结束日者;一次确认后逐个封存。</summary>
     private void Seal()
     {
-        var r = Selected();
-        if (r is null || r.P.Status == "sealed")
+        var picks = _list.SelectedItems.OfType<Row>().ToList();
+        if (picks.Count == 0)
             return;
-        if (r.P.EndDate is null)
+        var ready = picks.Where(r => r.P.Status != "sealed" && r.P.EndDate is not null).ToList();
+        var noEnd = picks.Count(r => r.P.Status != "sealed" && r.P.EndDate is null);
+        var note = noEnd > 0
+            ? $"\n\n另有 {noEnd} 个周期没有结束日(需先补结束日才能封存),已跳过。"
+            : "";
+        if (ready.Count == 0)
         {
-            MessageBox.Show("该周期还没有结束日。请先补结束日(或解除后再编辑)再封存,否则会冻结未来日期。",
-                "封存周期", MessageBoxButton.OK, MessageBoxImage.Warning);
+            var allSealed = picks.All(r => r.P.Status == "sealed");
+            MessageBox.Show(allSealed ? "所选周期均已封存。"
+                                      : $"所选周期都没有结束日,无法封存。{note}",
+                "封存周期", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (MessageBox.Show($"封存周期「{r.P.Name}」?\n\n封存后该周期内流水只读(可在本页解除)。",
+        var preview = string.Join("、", ready.Take(3).Select(r => r.P.Name));
+        if (ready.Count > 3)
+            preview += $" 等 {ready.Count} 个";
+        if (MessageBox.Show($"封存所选 {ready.Count} 个周期: {preview}?{note}\n\n封存后期内流水只读(可解除)。",
                 "封存周期", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return;
-        Periods.Seal(S, r.P.Id);
+        foreach (var r in ready)
+            Periods.Seal(S, r.P.Id);
         Reload();
     }
 
+    /// <summary>批量解除封存所选周期(已封存者)。</summary>
     private void Unseal()
     {
-        var r = Selected();
-        if (r is null || r.P.Status != "sealed")
+        var picks = _list.SelectedItems.OfType<Row>().Where(r => r.P.Status == "sealed").ToList();
+        if (picks.Count == 0)
             return;
-        Periods.Unseal(S, r.P.Id);
+        foreach (var r in picks)
+            Periods.Unseal(S, r.P.Id);
         Reload();
     }
 }

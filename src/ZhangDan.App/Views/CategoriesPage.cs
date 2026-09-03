@@ -95,7 +95,7 @@ internal sealed class CategoriesPage : PageBase
         gv.Columns.Add(new WGridViewColumn { Header = "关键词(导入归类)", Width = 200, DisplayMemberBinding = Bind("Keyword") });
         _list.View = gv;
         _list.Margin = new Thickness(20, 0, 20, 12);
-        _list.SelectionMode = SelectionMode.Single;
+        _list.SelectionMode = SelectionMode.Extended;
 
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -245,31 +245,46 @@ internal sealed class CategoriesPage : PageBase
         }
     }
 
+    /// <summary>批量删除所选分类:在用分类(有流水)跳过并提示,未用的一次确认后逐个删。</summary>
     private void Delete()
     {
-        var r = Selected();
-        if (r is null)
+        var picks = _list.SelectedItems.OfType<Row>().ToList();
+        if (picks.Count == 0)
             return;
-        var used = Categories.UsedCount(S, r.C.Id);
-        if (used > 0)
+        var ok = picks.Where(r => Categories.UsedCount(S, r.C.Id) == 0).ToList();
+        var used = picks.Where(r => Categories.UsedCount(S, r.C.Id) > 0).ToList();
+        if (used.Count > 0)
         {
-            MessageBox.Show($"「{r.C.Name}」仍被 {used} 笔流水使用,不能直接删除。\n请先把这些流水合并/改到别的分类。",
+            var u = string.Join("、", used.Take(3).Select(r => $"「{r.C.Name}」"));
+            if (used.Count > 3) u += " 等";
+            MessageBox.Show($"{u} 仍被流水使用,不能直接删除(已跳过)。\n请先把相关流水合并/改到别的分类。",
                 "删除分类", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (ok.Count == 0)
+                return;
+        }
+        var preview = string.Join("、", ok.Take(3).Select(r => $"「{r.C.Name}」"));
+        if (ok.Count > 3)
+            preview += " 等";
+        var msg = ok.Count == 1
+            ? $"删除分类 {preview}?"
+            : $"删除所选 {ok.Count} 个分类: {preview}?";
+        if (used.Count > 0)
+            msg += $"\n\n另有 {used.Count} 个在用分类被跳过。";
+        if (MessageBox.Show(msg, "删除分类", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
             return;
-        }
-        if (MessageBox.Show($"删除分类「{r.C.Name}」?", "删除分类",
-                MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
-            return;
-        try
+        foreach (var r in ok)
         {
-            Categories.Delete(S, r.C.Id);
-            Reload();
+            try
+            {
+                Categories.Delete(S, r.C.Id);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "分类·删除");
+                MessageBox.Show($"删除「{r.C.Name}」失败:\n{ex.Message}", "分类", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "分类·删除");
-            MessageBox.Show($"删除失败:\n{ex.Message}", "分类", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        Reload();
     }
 }
 
