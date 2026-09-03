@@ -81,7 +81,7 @@ internal static class Transactions
     {
         Periods.ThrowIfSealed(s, t.Date);   // 封存周期内的日期只读
         if (t.Direction == "out")
-            ThrowIfOverdraft(s, t.AccountId, t.AmountCents);   // 非负债账户余额不可为负
+            ThrowIfOverdraft(s, t.AccountId, t.Date, t.AmountCents);   // 非负债账户余额不可为负
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO transactions
@@ -113,7 +113,7 @@ VALUES
     public static long Transfer(LedgerSession s, TransferDraft t)
     {
         Periods.ThrowIfSealed(s, t.Date);   // 封存周期内的日期只读
-        ThrowIfOverdraft(s, t.FromAccountId, t.PrincipalCents);   // 非负债账户不可透支转出
+        ThrowIfOverdraft(s, t.FromAccountId, t.Date, t.PrincipalCents);   // 非负债账户不可透支转出
         using var cmd = s.Connection.CreateCommand();
         cmd.CommandText = @"
 INSERT INTO transactions
@@ -598,10 +598,16 @@ WHERE 1 = 1");
         return list;
     }
 
-    /// <summary>非负债账户不允许余额为负(零钱/银行/现金…);负债型(信用卡等)以后放开。</summary>
-    private static void ThrowIfOverdraft(LedgerSession s, long accountId, long spendCents)
+    /// <summary>
+    /// 非负债账户不允许余额为负(零钱/银行/现金…);负债型(信用卡等)以后放开。
+    /// 快照口径下(账户有 balance_date):基准日之前的流水是纯历史、不参与账面,无法用当前快照校验透支 → 不拦;
+    /// 基准日当天起的支出/转出才按「账面=基准+基准日后净变动」拦。基准日为空(重建式/无基准)则从最早起拦。
+    /// </summary>
+    private static void ThrowIfOverdraft(LedgerSession s, long accountId, string date, long spendCents)
     {
         if (IsLiabilityType(s, accountId))
+            return;
+        if (AccountCalibration.IsBeforeBalanceDate(s, accountId, date))
             return;
         var book = AccountCalibration.BookCents(s, accountId);
         if (book - spendCents < 0)

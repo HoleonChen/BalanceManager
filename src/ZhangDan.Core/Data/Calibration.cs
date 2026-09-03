@@ -72,6 +72,13 @@ WHERE status = 'normal' AND date >= $from
         return Convert.ToInt64(cmd.ExecuteScalar());
     }
 
+    /// <summary>某笔日期是否早于账户基准日(快照口径的「纯历史」段);基准日为空 → false。</summary>
+    public static bool IsBeforeBalanceDate(LedgerSession s, long accountId, string date)
+    {
+        var (_, d) = ReadBase(s, accountId);
+        return d is not null && string.CompareOrdinal(date, d) < 0;
+    }
+
     /// <summary>账面余额 = 基准 + 基准日后净变动(设计 §3.2「账面余额 = balance_base + Σ 流水」)。</summary>
     public static long BookCents(LedgerSession s, long accountId)
     {

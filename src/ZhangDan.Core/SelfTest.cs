@@ -34,6 +34,7 @@ internal static class SelfTest
 
                 SeedCanonicalCategories(session);   // 新库分类默认空;自检需标准分类支撑断言
                 DataFlow(session, steps);
+                SnapshotOverdraftFlow(session, steps);
             }
 
             // 用错误口令打开:应当被拒绝
@@ -133,6 +134,37 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
         {
             Log.Configure(prev.Level, prev.Dir, prev.Console); // 先关 writer,免得外层删自检目录撞上打开句柄
         }
+    }
+
+    /// <summary>快照口径透支守卫:基准日前的历史支出(账面为 0 也不拦),基准日当日透支仍拦。</summary>
+    private static void SnapshotOverdraftFlow(LedgerSession s, List<string> steps)
+    {
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var yesterday = DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd");
+        var a = Accounts.Insert(s, "快照透支测", "wallet", "", 0);
+        using (var up = s.Connection.CreateCommand())
+        {
+            up.CommandText = "UPDATE accounts SET balance_date = $d WHERE id = $id;";
+            up.Parameters.AddWithValue("$d", today);
+            up.Parameters.AddWithValue("$id", a);
+            up.ExecuteNonQuery();
+        }
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = yesterday, Direction = "out", AccountId = a, CategoryId = 8,
+            AmountCents = 900, Name = "历史支出", Note = "", Channel = "", InPool = false
+        });
+        try
+        {
+            Transactions.Add(s, new TxnDraft
+            {
+                Date = today, Direction = "out", AccountId = a, CategoryId = 8,
+                AmountCents = 100, Name = "当日透支", Note = "", Channel = "", InPool = false
+            });
+            throw new Exception("基准日当日透支支出未被拦截。");
+        }
+        catch (InvalidOperationException) { /* 预期:当天透支被拦 */ }
+        steps.Add("快照口径:基准日前支出放行、基准日当日透支仍拦");
     }
 
     /// <summary>流水/周期/作废 数据流断言;任何不符即抛错。</summary>
