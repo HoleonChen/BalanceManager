@@ -140,6 +140,9 @@ internal sealed class CreateLedgerDialog : Window
         }
         catch (Exception ex)
         {
+            // 「路径为空」是常规校验(FormatException),不入日志;其余真实路径/IO 异常才记
+            if (ex is not FormatException)
+                Log.Error(ex, "新建账本·保存位置解析");
             _error.Text = $"保存位置无效:{ex.Message}";
             return;
         }

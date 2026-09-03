@@ -369,6 +369,7 @@ internal sealed class OverviewPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "总览·流水保存失败");
             MessageBox.Show($"保存失败:\n{ex.Message}", "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -396,6 +397,7 @@ internal sealed class OverviewPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "总览·流水保存失败");
             MessageBox.Show($"保存失败:\n{ex.Message}", "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -442,6 +444,7 @@ internal sealed class OverviewPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "总览·流水保存失败");
             MessageBox.Show($"保存失败:\n{ex.Message}", "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -470,6 +473,7 @@ internal sealed class OverviewPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "总览·流水保存失败");
             MessageBox.Show($"保存失败:\n{ex.Message}", "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -494,6 +498,7 @@ internal sealed class OverviewPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "总览·作废流水");
             MessageBox.Show(ex.Message, "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

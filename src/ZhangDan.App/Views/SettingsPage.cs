@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -64,12 +65,17 @@ internal sealed class SettingsPage : PageBase
             Text =
                 $"账本默认目录:{AppPaths.UserDataDir}\n" +
                 $"报表目录:{AppPaths.ReportDir}\n" +
-                $"设置文件:{AppPaths.SettingsFile}",
+                $"设置文件:{AppPaths.SettingsFile}\n" +
+                $"日志目录:{AppPaths.LogDir}",
             Foreground = Brushes.Gray,
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 4)
         });
+
+        var logDirBtn = new Button { Content = "打开日志目录…", MinWidth = 130, Height = 32, HorizontalAlignment = HorizontalAlignment.Left };
+        logDirBtn.Click += (_, _) => OpenLogDir();
+        panel.Children.Add(logDirBtn);
 
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
@@ -106,6 +112,22 @@ internal sealed class SettingsPage : PageBase
     {
         App.Settings.MidnightGraceEnabled = enabled;
         App.Settings.Save();
+    }
+
+    private void OpenLogDir()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        try
+        {
+            Directory.CreateDirectory(AppPaths.LogDir);
+            Process.Start(new ProcessStartInfo { FileName = AppPaths.LogDir, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "打开日志目录");
+            MessageBox.Show($"打开日志目录失败:\n{ex.Message}", "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void RunSelfTest(Button btn)
@@ -159,6 +181,7 @@ internal sealed class SettingsPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "导出CSV");
             MessageBox.Show(Window.GetWindow(this), $"导出失败:\n{ex.Message}",
                 "导出 CSV", MessageBoxButton.OK, MessageBoxImage.Error);
         }

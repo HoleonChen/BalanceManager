@@ -160,6 +160,7 @@ internal sealed class CategoriesPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "分类·新建");
             MessageBox.Show($"新建分类失败:\n{ex.Message}", "分类", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -184,6 +185,7 @@ internal sealed class CategoriesPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "分类·编辑保存");
             MessageBox.Show($"保存失败:\n{ex.Message}", "分类", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -235,6 +237,7 @@ internal sealed class CategoriesPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "分类·合并");
             MessageBox.Show($"合并失败:\n{ex.Message}", "合并分类", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -261,6 +264,7 @@ internal sealed class CategoriesPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "分类·删除");
             MessageBox.Show($"删除失败:\n{ex.Message}", "分类", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

@@ -452,6 +452,7 @@ internal sealed class FlowPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "流水·保存失败");
             MessageBox.Show($"保存失败:\n{ex.Message}", "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -480,6 +481,7 @@ internal sealed class FlowPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "流水·保存失败");
             MessageBox.Show($"保存失败:\n{ex.Message}", "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -503,6 +505,7 @@ internal sealed class FlowPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "流水·作废流水");
             MessageBox.Show(ex.Message, "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

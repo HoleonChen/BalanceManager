@@ -210,6 +210,7 @@ internal sealed class AccountsPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "账户·编辑保存");
             MessageBox.Show($"保存失败:\n{ex.Message}", "账户", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -243,6 +244,7 @@ internal sealed class AccountsPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "账户·校准余额");
             MessageBox.Show($"校准失败:\n{ex.Message}", "校准余额", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -274,6 +276,7 @@ internal sealed class AccountsPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "账户·补记入账");
             MessageBox.Show($"补记保存失败:\n{ex.Message}", "补记真实明细", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -444,6 +447,7 @@ internal sealed class AccountsPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "账户·新建账户");
             MessageBox.Show($"新建账户失败:\n{ex.Message}", "账户", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -463,6 +467,7 @@ internal sealed class AccountsPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "账户·编辑保存");
             MessageBox.Show($"保存失败:\n{ex.Message}", "账户", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

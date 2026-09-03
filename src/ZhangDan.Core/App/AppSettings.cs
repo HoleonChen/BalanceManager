@@ -19,6 +19,9 @@ internal sealed class AppSettings
     /// <summary>凌晨宽限开关:过了 0 点仍允许把流水记到「昨天」。</summary>
     public bool MidnightGraceEnabled { get; set; }
 
+    /// <summary>日志级别(debug/info/warn/error;缺省/未知 → info)。</summary>
+    public string? LogLevel { get; set; }
+
     public static AppSettings Load()
     {
         var settings = new AppSettings();
@@ -34,8 +37,8 @@ internal sealed class AppSettings
         }
         catch (Exception ex)
         {
-            // 设置损坏只影响记忆,不挡启动
-            System.Diagnostics.Debug.WriteLine($"读取设置失败:{ex.Message}");
+            // 设置损坏只影响记忆,不挡启动(Log 未配置时为 no-op)
+            Log.Error(ex, "读取设置失败(继续以默认设置启动)");
         }
         return settings;
     }

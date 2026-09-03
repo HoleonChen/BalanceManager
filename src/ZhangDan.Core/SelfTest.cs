@@ -57,6 +57,8 @@ internal static class SelfTest
                 throw new Exception("重开读回的标记与写入不一致。");
             steps.Add("正确口令重开读回");
 
+            LogSteps(steps);
+
             return (true, steps, null);
         }
         catch (Exception ex)
@@ -92,6 +94,38 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
   (13, NULL, '理财收益', NULL, 3, 'income'),
   (14, NULL, '其他',    NULL, 4, 'income');";
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>日志断言:临时目录开文件,验级别标记/异常文本/上下文落盘与级别过滤,随后还原配置。</summary>
+    private static void LogSteps(List<string> steps)
+    {
+        var dir = Path.Combine(AppPaths.AppDataDir, "自检");
+        string TodayLog() => Path.Combine(dir, "app-" + DateTime.Now.ToString("yyyyMMdd") + ".log");
+        var prev = Log.Config;
+        try
+        {
+            Log.Configure(LogLevel.Debug, dir, console: false);
+            Log.Debug("自检 debug 行");
+            Log.Info("自检 info 行");
+            Log.Warn("自检 warn 行");
+            Log.Error(new InvalidOperationException("自检异常"), "自检 ctx");
+
+            var txt = File.ReadAllText(TodayLog());
+            if (!txt.Contains("[INF]") || !txt.Contains("[WRN]") || !txt.Contains("[ERR]")
+                || !txt.Contains("自检异常") || !txt.Contains("自检 ctx"))
+                throw new Exception("日志行缺失(级别标记/异常文本/上下文未落盘)。");
+
+            Log.Configure(LogLevel.Error, dir, console: false);   // 切到 Error 级
+            Log.Info("不应落盘 info");
+            if (File.ReadAllText(TodayLog()).Contains("不应落盘 info"))
+                throw new Exception("级别过滤失效:Error 级别下 Info 仍被写入。");
+
+            steps.Add("日志:按级别落盘/异常+上下文/级别过滤正确");
+        }
+        finally
+        {
+            Log.Configure(prev.Level, prev.Dir, prev.Console); // 先关 writer,免得外层删自检目录撞上打开句柄
+        }
     }
 
     /// <summary>流水/周期/作废 数据流断言;任何不符即抛错。</summary>

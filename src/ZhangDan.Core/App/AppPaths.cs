@@ -25,11 +25,15 @@ internal static class AppPaths
     /// <summary>明文偏好文件路径。</summary>
     public static string SettingsFile { get; } = Path.Combine(AppDataDir, "app.json");
 
+    /// <summary>日志目录(按自然日分片的 app-yyyyMMdd.log 所在)。</summary>
+    public static string LogDir { get; } = Path.Combine(AppDataDir, "logs");
+
     /// <summary>确保上述目录存在(幂等)。</summary>
     public static void EnsureDirs()
     {
         Directory.CreateDirectory(AppDataDir);
         Directory.CreateDirectory(UserDataDir);
         Directory.CreateDirectory(ReportDir);
+        Directory.CreateDirectory(LogDir);
     }
 }

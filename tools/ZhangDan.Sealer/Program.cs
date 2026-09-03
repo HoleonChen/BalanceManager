@@ -18,6 +18,8 @@ internal static class Program
     private static int Main(string[] argv)
     {
         Console.OutputEncoding = Encoding.UTF8;
+        // 控制台输出保持原样(给 zd_book.py/人看);额外镜像一份文件日志供审计排障
+        Log.Configure(LogLevel.Info, AppPaths.LogDir, console: false);
         try
         {
             if (argv.Length == 0 || argv[0] is "-h" or "--help" or "help")
@@ -125,11 +127,13 @@ internal static class Program
                 var report = Importer.Build(ses, root);
                 ses.Dispose();
                 ses = null;
+                Log.Info($"已生成:{outPath}  账本名「{ledgerName}」");
                 Console.WriteLine($"已生成:{outPath}  账本名「{ledgerName}」");
                 Console.WriteLine(report);
             }
             catch (Exception ex)
             {
+                Log.Error(ex, "导入失败");
                 Console.Error.WriteLine($"导入失败:{ex.Message}");
                 TryDelete(outPath);
                 return 1;
@@ -143,11 +147,13 @@ internal static class Program
             try
             {
                 using var verify = LedgerStore.Open(outPath, password);
+                Log.Info($"重开验证:通过  {outPath}");
                 Console.WriteLine("重开验证:通过(口令正确、可读)。");
                 Console.WriteLine(VerifySummary(verify));
             }
             catch (LedgerPasswordException)
             {
+                Log.Error("重开验证失败:口令不符(文件可能已损坏)。");
                 Console.Error.WriteLine("重开验证失败:口令不符(文件可能已损坏)。");
                 return 1;
             }
@@ -155,6 +161,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "sealer 顶层失败");
             Console.Error.WriteLine($"失败:{ex.Message}");
             return 1;
         }

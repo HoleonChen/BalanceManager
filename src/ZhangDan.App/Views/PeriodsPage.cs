@@ -117,6 +117,7 @@ internal sealed class PeriodsPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "周期·新建");
             MessageBox.Show($"建立周期失败:\n{ex.Message}", "周期", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -144,6 +145,7 @@ internal sealed class PeriodsPage : PageBase
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "周期·编辑");
             MessageBox.Show($"保存失败:\n{ex.Message}", "周期", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

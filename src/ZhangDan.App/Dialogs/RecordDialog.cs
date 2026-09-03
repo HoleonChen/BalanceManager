@@ -266,6 +266,7 @@ internal sealed class RecordDialog : Window
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "记一笔·保存失败");
             _error.Foreground = System.Windows.Media.Brushes.Firebrick;
             _error.Text = $"保存失败:{ex.Message}";
         }

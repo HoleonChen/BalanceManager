@@ -104,6 +104,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "新建账本");
             MessageBox.Show(this, $"新建账本失败:\n{ex.Message}", "账单管理",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
@@ -152,6 +153,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "打开账本");
             MessageBox.Show(this, $"打开账本失败:\n{ex.Message}", "账单管理",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
