@@ -38,6 +38,9 @@ internal static class SelfTest
                 LiabilityFlow(session, steps);
             }
 
+            ReportsFlow(steps);
+
+
             // 用错误口令打开:应当被拒绝
             bool wrongBlocked;
             try
@@ -215,6 +218,99 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
         catch (InvalidOperationException) { /* 预期 */ }
 
         steps.Add("负债:信用卡/花呗可负余额、还款归零、净资产计负、普通账户仍拦");
+    }
+
+    /// <summary>报表聚合断言(独立临时账本,隔离既有周期):总览口径/校准单列/分类占比/未归类/跨周期列/期末净资产重建/TOP/转账小计。</summary>
+    private static void ReportsFlow(List<string> steps)
+    {
+        var dir = Path.Combine(AppPaths.AppDataDir, "自检");
+        var path = Path.Combine(dir, $"自检-报表-{Guid.NewGuid():N}.lbook");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var s = LedgerStore.Create(path, "报表自检", TestPassword);
+            SeedCanonicalCategories(s);
+            // base=0 → balance_date 空(重建口径,历史可推到任一日);期初用报表区间前的收入充当
+            var wa = Accounts.Insert(s, "钱包", "wallet", "微信", 0);
+            var ba = Accounts.Insert(s, "银行", "bank", "银行", 0);
+            var p1 = Periods.Insert(s, "一月", "2026-01-01", "2026-01-31");
+            var p2 = Periods.Insert(s, "二月", "2026-02-01", "2026-02-28");
+            Transactions.Add(s, new TxnDraft { Date = "2025-12-30", Direction = "in", AccountId = wa, CategoryId = 10, AmountCents = 100_000, Name = "期初", Note = "", Channel = "", InPool = false });
+
+            Transactions.Add(s, new TxnDraft { Date = "2026-01-05", Direction = "out", AccountId = wa, CategoryId = 1, AmountCents = 3000, Name = "早", Note = "", Channel = "", InPool = false });
+            Transactions.Add(s, new TxnDraft { Date = "2026-01-06", Direction = "out", AccountId = wa, CategoryId = 2, AmountCents = 500, Name = "地铁", Note = "", Channel = "", InPool = false });
+            Transactions.Add(s, new TxnDraft { Date = "2026-01-07", Direction = "in", AccountId = wa, CategoryId = 10, AmountCents = 8000, Name = "生活费", Note = "", Channel = "", InPool = false });
+            Transactions.Add(s, new TxnDraft { Date = "2026-01-10", Direction = "out", AccountId = wa, CategoryId = 1, AmountCents = 600, Name = "作废餐", Note = "", Channel = "", InPool = false });
+            Transactions.Cancel(s, IdByName(s, "作废餐"));                     // 作废:不计
+            Transactions.Transfer(s, new TransferDraft { Date = "2026-01-20", FromAccountId = wa, ToAccountId = ba, PrincipalCents = 10_000, DeltaCents = 0, Kind = "互转", Note = "", InPool = false });
+            Transactions.Add(s, new TxnDraft { Date = "2026-02-03", Direction = "out", AccountId = wa, CategoryId = 1, AmountCents = 4000, Name = "二月餐", Note = "", Channel = "", InPool = false });
+            Transactions.Add(s, new TxnDraft { Date = "2026-02-04", Direction = "in", AccountId = wa, CategoryId = 10, AmountCents = 8000, Name = "二月生活费", Note = "", Channel = "", InPool = false });
+            Transactions.Add(s, new TxnDraft { Date = "2026-03-05", Direction = "out", AccountId = wa, CategoryId = null, AmountCents = 700, Name = "空档未归类", Note = "", Channel = "", InPool = false });
+            // 校准账户:账面 50000(期初收入) → 实际 30000,差 -20000 → 今天记一笔 source=calibration 支出
+            var calib = Accounts.Insert(s, "校准卡", "bank", "银行", 0);
+            Transactions.Add(s, new TxnDraft { Date = "2025-12-31", Direction = "in", AccountId = calib, CategoryId = 10, AmountCents = 50_000, Name = "校准期初", Note = "", Channel = "", InPool = false });
+            AccountCalibration.Apply(s, calib, 30_000, CalibMethod.Adjustment, "报表测试");
+
+            var range = new Reports.Scope { Kind = Reports.ScopeKind.Range, Start = "2026-01-01", End = "2026-12-31" };
+            var sp1 = new Reports.Scope { Kind = Reports.ScopeKind.Periods, PeriodIds = new long[] { p1 } };
+            var sp2 = new Reports.Scope { Kind = Reports.ScopeKind.Periods, PeriodIds = new long[] { p2 } };
+            var sp12 = new Reports.Scope { Kind = Reports.ScopeKind.Periods, PeriodIds = new long[] { p1, p2 } };
+
+            var ov = Reports.Overview(s, range);
+            if (ov.Days != 365 || ov.OutCents != 28_200 || ov.InCents != 16_000 || ov.AdjOutCents != 20_000 || ov.AdjInCents != 0)
+                throw new Exception($"报表总览口径不符(out={ov.OutCents} in={ov.InCents} adj={ov.AdjOutCents}/{ov.AdjInCents} days={ov.Days})。");
+            var share = Reports.ExpenseShare(s, range);
+            long shareSum = 0;
+            foreach (var row in share) shareSum += row.Cents;
+            if (shareSum + ov.AdjOutCents != ov.OutCents)
+                throw new Exception("分类占比(不含校准)+ 校准单列应等于总览支出。");
+            if (!share.Any(r => r.IsUnassigned && r.Cents == 700))
+                throw new Exception("空档未归类(分类 null)应单列为未归类。");
+
+            var ov1 = Reports.Overview(s, sp1);
+            if (ov1.OutCents != 3500 || ov1.InCents != 8000)
+                throw new Exception("周期一月总览不符。");
+            if (Reports.Overview(s, sp2).OutCents != 4000)
+                throw new Exception("周期二月总览不符。");
+            long share12 = 0;
+            foreach (var row in Reports.ExpenseShare(s, sp12)) share12 += row.Cents;
+            if (share12 != 7500)
+                throw new Exception("周期范围应排除空档(7500)。");
+
+            var cols = Reports.StackColumns(s, new long[] { p1, p2 });
+            if (cols.Count != 2 || cols[0].OutCents != 3500 || cols[1].OutCents != 4000)
+                throw new Exception("跨周期堆叠列口径不符。");
+
+            var today = DateTime.Today.ToString("yyyy-MM-dd");
+            if (Reports.NetAssetsAt(s, today) != Accounts.NetAssets(s))
+                throw new Exception("期末净资产(今日)应等于 Accounts.NetAssets。");
+            if (Reports.NetAssetsAt(s, "2026-01-31") != 154_500)
+                throw new Exception("期末净资产重建(1/31)不符。");
+
+            var topOut = Reports.Top(s, range, income: false, n: 5);
+            if (topOut.Count == 0 || topOut[0].AmountCents != 4000 || topOut[0].Name != "二月餐")
+                throw new Exception("大额 TOP 排序不符。");
+            var tr = Reports.TransferSummary(s, sp1);
+            if (tr.Count != 1 || tr[0].Kind != "互转" || tr[0].PrincipalCents != 10_000 || tr[0].Count != 1)
+                throw new Exception("转账小计不符。");
+            var daily = Reports.Daily(s, range);
+            if (daily.Count == 0 || daily[0].Date != "2026-01-05" || daily[^1].CumNetCents != -12_200)
+                throw new Exception("每日收支/累计不符。");
+
+            steps.Add("报表:总览口径/校准单列/占比/未归类/跨周期列/期末净资产重建/TOP/转账小计");
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    private static long IdByName(LedgerSession s, string name)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "SELECT id FROM transactions WHERE name = $n ORDER BY id DESC LIMIT 1;";
+        cmd.Parameters.AddWithValue("$n", name);
+        return Convert.ToInt64(cmd.ExecuteScalar());
     }
 
     /// <summary>流水/周期/作废 数据流断言;任何不符即抛错。</summary>

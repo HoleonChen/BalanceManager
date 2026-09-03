@@ -4,6 +4,9 @@ using Microsoft.Data.Sqlite;
 
 namespace ZhangDan;
 
+/// <summary>资金池预留项(reserve_items;报表「预留到期提醒」用)。</summary>
+internal sealed record ReserveItem(string? Due, string Item, long AmountCents);
+
 /// <summary>资金池设置行(fund_pools;单池 = 每周期至多一条)。</summary>
 internal sealed record PoolRow(
     long Id,
@@ -115,6 +118,19 @@ SELECT COALESCE(SUM(m), 0) FROM (
         cmd.Parameters.AddWithValue("$pid", periodId);
         cmd.Parameters.AddWithValue("$acct", accountId);
         return Convert.ToInt64(cmd.ExecuteScalar());
+    }
+
+    /// <summary>某池的预留项清单(按到期日排序;报表「预留到期提醒」用)。</summary>
+    public static IReadOnlyList<ReserveItem> ReserveItems(LedgerSession s, long poolId)
+    {
+        var list = new List<ReserveItem>();
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = "SELECT due, item, amount_cents FROM reserve_items WHERE pool_id = $pid ORDER BY due, id;";
+        cmd.Parameters.AddWithValue("$pid", poolId);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new ReserveItem(r.IsDBNull(0) ? null : r.GetString(0), r.GetString(1), r.GetInt64(2)));
+        return list;
     }
 
     private static PoolRow ReadRow(SqliteDataReader r)

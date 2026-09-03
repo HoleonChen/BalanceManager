@@ -86,6 +86,30 @@ WHERE status = 'normal' AND date >= $from
         return baseCents + NetSince(s, accountId, date);
     }
 
+    /// <summary>账面截至某日(含 end):基准 + 基准日(或最早)起 ≤ end 的正常净变动。报表「期末净资产重建」用。</summary>
+    public static long BookThrough(LedgerSession s, long accountId, string endDate)
+    {
+        using var cmd = s.Connection.CreateCommand();
+        cmd.CommandText = @"
+SELECT a.balance_base_cents + COALESCE(SUM(CASE
+    WHEN t.direction = 'in'  THEN t.amount_cents
+    WHEN t.direction = 'out' THEN -t.amount_cents
+    WHEN t.direction = 'transfer' AND t.account_id = a.id
+         THEN -COALESCE(t.principal_cents, 0)
+    WHEN t.direction = 'transfer' AND t.to_account_id = a.id
+         THEN t.amount_cents + COALESCE(t.delta_cents, 0)
+    ELSE 0 END), 0)
+FROM accounts a
+LEFT JOIN transactions t ON t.status = 'normal'
+  AND t.date >= COALESCE(a.balance_date, '0000-01-01') AND t.date <= $end
+  AND ((t.direction IN ('in','out') AND t.account_id = a.id)
+    OR (t.direction = 'transfer' AND (t.account_id = a.id OR t.to_account_id = a.id)))
+WHERE a.id = $acct GROUP BY a.id;";
+        cmd.Parameters.AddWithValue("$acct", accountId);
+        cmd.Parameters.AddWithValue("$end", endDate);
+        return Convert.ToInt64(cmd.ExecuteScalar() ?? 0L);
+    }
+
     /// <summary>执行一次校准(实际余额对齐)。method 三选一;记审计日志。返回差额(=实际−账面)。</summary>
     public static long Apply(LedgerSession s, long accountId, long actualCents,
         string method, string? note)
