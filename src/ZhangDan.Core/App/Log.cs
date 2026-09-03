@@ -151,7 +151,9 @@ internal static class Log
         var path = Path.Combine(_dir, "app-" + now.ToString("yyyyMMdd") + ".log");
         try
         {
-            _writer = new StreamWriter(path, append: true, new UTF8Encoding(false));
+            // FileShare.ReadWrite:进程运行时也允许外部读取/临时读取日志(默认 Share.Read 在 Windows 上会挡别的读句柄)
+            var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            _writer = new StreamWriter(stream, new UTF8Encoding(false));
             _day = day;
             PruneLocked();
         }

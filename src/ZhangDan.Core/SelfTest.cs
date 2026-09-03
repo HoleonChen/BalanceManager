@@ -114,6 +114,7 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
             Log.Info("自检 info 行");
             Log.Warn("自检 warn 行");
             Log.Error(new InvalidOperationException("自检异常"), "自检 ctx");
+            Log.Configure(LogLevel.Debug, dir, console: false);   // 先关 writer,Windows 需先关再读
 
             var txt = File.ReadAllText(TodayLog());
             if (!txt.Contains("[INF]") || !txt.Contains("[WRN]") || !txt.Contains("[ERR]")
