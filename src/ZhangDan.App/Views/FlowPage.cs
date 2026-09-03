@@ -431,7 +431,8 @@ internal sealed class FlowPage : PageBase
         var e = Transactions.GetEditable(S, id);
         if (e is null)
             return;
-        var dlg = new RecordDialog(S, defaultDate: DateTime.Parse(date), settings: App.Settings, edit: e);
+        var dlg = new RecordDialog(S, defaultDate: DateTime.Parse(date), settings: App.Settings, edit: e,
+            presetAccountId: e.AccountId, presetCategoryId: e.CategoryId);
         if (dlg.ShowDialog() != true)
             return;
         try

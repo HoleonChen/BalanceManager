@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ZhangDan.App.Dialogs;
 
 namespace ZhangDan.App.Views;
 
@@ -226,15 +227,54 @@ internal sealed class AccountsPage : PageBase
             var diff = AccountCalibration.Apply(S, id, dlg.ActualCents, dlg.Method, dlg.Note);
             if (dlg.Method == CalibMethod.RealDetails && diff != 0)
             {
-                MessageBox.Show(
-                    $"已记录本次校准(方式:补记真实明细)。\n账面与实际仍差 {Money.Yuan(Math.Abs(diff))}。\n请手动补记漏记的真实流水;账面会随补记自动对齐。",
-                    "校准余额", MessageBoxButton.OK, MessageBoxImage.Information);
+                // 「补记真实明细」不会自动写流水:必须把漏记的真实收支/转账记进账本,账面才对齐;
+                // 不补则差额永远挂账,成为坏账。给可行动引导:确认后直接打开「记一笔」。
+                var go = MessageBox.Show(
+                    $"本次仅记录了审计,不会自动产生流水。\n\n账面与实际仍差 {Money.Yuan(Math.Abs(diff))}。" +
+                    (diff > 0
+                        ? "\n实际比账面高——通常是漏记了收入/转入,补记方向多为收入。"
+                        : "\n账面比实际高——通常是漏记了支出/转出,补记方向多为支出。") +
+                    "\n\n是否现在就打开「记一笔」补记漏记流水?",
+                    "补记真实明细", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (go == MessageBoxResult.Yes)
+                    OpenSupplementalRecord(id, Math.Abs(diff));
             }
             Reload();
         }
         catch (Exception ex)
         {
             MessageBox.Show($"校准失败:\n{ex.Message}", "校准余额", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>补记引导:预置账户与差额金额,打开记一笔把漏记的真实流水入账。</summary>
+    private void OpenSupplementalRecord(long accountId, long hintCents)
+    {
+        var dlg = new RecordDialog(S, defaultDate: DateTime.Today, settings: App.Settings,
+            presetAccountId: accountId, presetAmountCents: hintCents)
+        { Owner = Window.GetWindow(this) };
+        if (dlg.ShowDialog() != true)
+            return;
+        try
+        {
+            Transactions.Add(S, new TxnDraft
+            {
+                Date = dlg.DateStr,
+                Direction = dlg.Direction,
+                AccountId = dlg.AccountId,
+                CategoryId = dlg.CategoryId,
+                AmountCents = dlg.AmountCents,
+                Name = dlg.TxnName,
+                Channel = dlg.Channel,
+                Note = dlg.Note,
+                InPool = dlg.InPool
+            });
+            MessageBox.Show("补记已入账。若仍有差额,可再次「校准余额」核对。",
+                "补记真实明细", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"补记保存失败:\n{ex.Message}", "补记真实明细", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

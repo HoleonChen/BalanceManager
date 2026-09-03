@@ -39,7 +39,9 @@ internal sealed class RecordDialog : Window
     public string Note => _noteBox.Text.Trim();
     public bool InPool => _poolCheck.IsChecked == true;
 
-    public RecordDialog(LedgerSession ledger, DateTime defaultDate, AppSettings settings, TxnEditable? edit = null)
+    public RecordDialog(LedgerSession ledger, DateTime defaultDate, AppSettings settings,
+        TxnEditable? edit = null,
+        long? presetAccountId = null, long? presetCategoryId = null, long? presetAmountCents = null)
     {
         _ledger = ledger;
         _accounts = new List<AccountRow>(Accounts.ListEnabled(ledger));
@@ -112,6 +114,39 @@ internal sealed class RecordDialog : Window
 
         Content = panel;
         ApplyDirection();
+        ApplyPresets(presetAccountId, presetCategoryId, presetAmountCents, edit);
+    }
+
+    /// <summary>预置账户/分类(编辑回填原值;补记按账户+差额金额),在分类列按方向就绪后再设置。</summary>
+    private void ApplyPresets(long? accountId, long? categoryId, long? amountCents, TxnEditable? edit)
+    {
+        var wantAccount = accountId ?? edit?.AccountId;
+        if (wantAccount is long aid)
+        {
+            for (int i = 0; i < _accountBox.Items.Count; i++)
+            {
+                if (_accountBox.Items[i] is AccountRow a && a.Id == aid)
+                {
+                    _accountBox.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+        var wantCategory = categoryId ?? edit?.CategoryId;
+        if (wantCategory is long cid)
+        {
+            for (int i = 0; i < _categoryBox.Items.Count; i++)
+            {
+                if (_categoryBox.Items[i] is CategoryRow c && c.Id == cid)
+                {
+                    _categoryBox.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+        // 补记引导可预填差额金额(编辑态金额已由 edit 回填,不覆盖)
+        if (edit is null && amountCents is long amt)
+            _amountBox.Text = (amt / 100m).ToString("0.##", CultureInfo.InvariantCulture);
     }
 
     private void ApplyDirection()

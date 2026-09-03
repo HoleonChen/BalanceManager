@@ -267,7 +267,8 @@ internal sealed class DayLedgerPage : PageBase
         var e = Transactions.GetEditable(S, id);
         if (e is null)
             return;
-        var dlg = new RecordDialog(S, defaultDate: _viewDate.Date, settings: App.Settings, edit: e);
+        var dlg = new RecordDialog(S, defaultDate: _viewDate.Date, settings: App.Settings, edit: e,
+            presetAccountId: e.AccountId, presetCategoryId: e.CategoryId);
         if (dlg.ShowDialog() != true)
             return;
         try
