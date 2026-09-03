@@ -101,10 +101,13 @@ internal static class ReportComposer
         return new ReportSheet("总览", new[] { "指标", "金额(元)" }, rows);
     }
 
-    /// <summary>占比表 + 同步生成饼图 PNG(颜色取分类色,未归类灰块)。</summary>
+    /// <summary>占比表 + 同步生成饼图 PNG;类别按金额降序、未归类垫底,表/饼同序。</summary>
     private static void AddShare(ReportContent content, LedgerSession s, ZhangDan.Reports.Scope scope)
     {
-        var share = Reports.ExpenseShare(s, scope);
+        var share = Reports.ExpenseShare(s, scope)
+            .OrderBy(r => r.IsUnassigned ? 1 : 0)
+            .ThenByDescending(r => r.Cents)
+            .ToList();
         long total = share.Sum(r => r.Cents);
         var rows = share.Select(r => new[]
         {
@@ -139,12 +142,11 @@ internal static class ReportComposer
         }).ToList();
         content.Sheets.Add(new ReportSheet("跨周期趋势", new[] { "周期", "收入", "支出", "结余", "校准(支)" }, rows));
 
-        // 图:堆叠面积(分类自下而上按 sort_order + 未归类尾部);图内无中文,语义交给 PDF 说明/图例表
+        // 图:堆叠面积;类别统一序 = 合计金额降序(未归类垫底),表/饼/堆叠/图例同序。图内无中文。
         var union = UnionAxis(s, cols);
         content.TrendPeriodMap.Clear();
         foreach (var c in cols) content.TrendPeriodMap.Add(c.Name);
         content.TrendCats.Clear();
-        content.TrendCats.AddRange(union);
         if (union.Count > 0 && cols.Count > 0)
         {
             var cents = new double[union.Count, cols.Count];
@@ -154,8 +156,36 @@ internal static class ReportComposer
                 for (int i = 0; i < union.Count; i++)
                     cents[i, j] = byName.GetValueOrDefault(union[i].Name);
             }
-            content.TrendPng = ReportCharts.StackedArea(cols.Count, union.Select(u => u.Hex).ToList(), cents, req.PercentMode);
+            // 统一序:合计金额降序,未归类垫底
+            double Grand(int i)
+            {
+                double s = 0;
+                for (int j = 0; j < cols.Count; j++) s += cents[i, j];
+                return s;
+            }
+            var orderIdx = Enumerable.Range(0, union.Count).ToList();
+            orderIdx.Sort((a, b) => CompareCat(union[a].Name, Grand(a), union[b].Name, Grand(b)));
+            var orderedUnion = orderIdx.Select(i => union[i]).ToList();
+            var orderedCents = new double[orderIdx.Count, cols.Count];
+            for (int k = 0; k < orderIdx.Count; k++)
+                for (int j = 0; j < cols.Count; j++)
+                    orderedCents[k, j] = cents[orderIdx[k], j];
+
+            content.TrendCats.AddRange(orderedUnion);
+            content.TrendPng = ReportCharts.StackedArea(cols.Count, orderedUnion.Select(u => u.Hex).ToList(), orderedCents, req.PercentMode);
         }
+        else
+        {
+            content.TrendCats.AddRange(union);
+        }
+    }
+
+    private static int CompareCat(string nameA, double grandA, string nameB, double grandB)
+    {
+        int ua = nameA == "未归类" ? 1 : 0;
+        int ub = nameB == "未归类" ? 1 : 0;
+        if (ua != ub) return ua - ub;          // 未归类垫底
+        return grandB.CompareTo(grandA);        // 其余金额降序
     }
 
     /// <summary>单周期:自动带上相邻几个周期作上下文(前后各 1);对比/多选直接用所选。</summary>
