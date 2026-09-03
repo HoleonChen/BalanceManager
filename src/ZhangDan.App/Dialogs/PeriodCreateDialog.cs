@@ -22,7 +22,8 @@ internal sealed class PeriodCreateDialog : Window
     private readonly TextBox _name = new() { Text = "生活费", Width = 300 };
     private readonly DatePicker _start = new() { Width = 300, SelectedDate = DateTime.Today };
     private readonly CheckBox _endCheck = new() { Content = "计划结束日期", IsChecked = true, VerticalAlignment = VerticalAlignment.Center };
-    private readonly DatePicker _end = new() { Width = 180, SelectedDate = DateTime.Today.AddDays(30) };
+    // 结束日初始为「自动推导」:随开始日 = 下月同日的前一天(见 AutoEndDate);用户手动挑过(或编辑已存值)后不再自动跟随。
+    private readonly DatePicker _end = new() { Width = 180 };
 
     private readonly CheckBox _incomeCheck = new() { Content = "初始收入(可选)", VerticalAlignment = VerticalAlignment.Center };
     private readonly ComboBox _incomeAccount = new() { Width = 200 };
@@ -45,6 +46,8 @@ internal sealed class PeriodCreateDialog : Window
     };
     private readonly StackPanel _poolBody = new();
     private bool _syncingReserve;
+    private bool _settingEnd;   // SetAutoEnd 期间置位,避免把程序设值误判为“用户手动挑过”
+    private bool _endManual;    // 用户手动挑过结束日 → 结束日不再随开始日自动推
 
     private readonly TextBlock _error = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
 
@@ -87,6 +90,16 @@ internal sealed class PeriodCreateDialog : Window
         _reservePercent.TextChanged += (_, _) => SyncFromPercent();
         _budgetBox.TextChanged += (_, _) => { SyncFromAmount(); RefreshReserveHint(); };
 
+        // 结束日自动推导:开始日每变一次、结束日跟随到「下月同日的前一天」;
+        // 仅新建向导生效;编辑态结束日取自存储值/用户手调,不自动跟随。
+        _end.SelectedDateChanged += (_, _) => { if (!_settingEnd) _endManual = true; };
+        _start.SelectedDateChanged += (_, _) =>
+        {
+            if (existing is not null || _endManual || _start.SelectedDate is not { } s)
+                return;
+            SetAutoEnd(AutoEndDate(s));
+        };
+
         FillCombo(_incomeAccount, _accounts);
         FillCombo(_incomeCat, _incomeCats);
 
@@ -96,12 +109,22 @@ internal sealed class PeriodCreateDialog : Window
             _name.Text = existing.Name;
             _start.SelectedDate = DateTime.Parse(existing.StartDate);
             if (existing.EndDate is not null)
-                _end.SelectedDate = DateTime.Parse(existing.EndDate);
+            {
+                _settingEnd = true;
+                try { _end.SelectedDate = DateTime.Parse(existing.EndDate); }
+                finally { _settingEnd = false; }
+                _endManual = true;   // 已存结束日按实际值,不随开始日自动推
+            }
             else
             {
                 _endCheck.IsChecked = false;
                 _end.IsEnabled = false;
             }
+        }
+        else
+        {
+            // 新建:结束日按默认开始日(今天)自动推导一次。
+            SetAutoEnd(AutoEndDate(_start.SelectedDate!.Value));
         }
 
         BuildPoolBody(ledger, _poolFixed);
@@ -190,6 +213,18 @@ internal sealed class PeriodCreateDialog : Window
         row.Children.Add(_reservePercent);
         row.Children.Add(pctMark);
         return row;
+    }
+
+    /// <summary>自动推结束日 = 开始日的「下月同日 − 1 天」:9/3 起的周期到 10/2 收,
+    /// 10/3 正好开下一期——周期开始日总落在每月的同一天,更整齐。</summary>
+    private static DateTime AutoEndDate(DateTime start) => start.AddMonths(1).AddDays(-1);
+
+    /// <summary>程序性设定结束日(置位 _settingEnd,不触发 _endManual)。</summary>
+    private void SetAutoEnd(DateTime end)
+    {
+        _settingEnd = true;
+        try { _end.SelectedDate = end; }
+        finally { _settingEnd = false; }
     }
 
     private static string AccountName(LedgerSession s, long id)
