@@ -10,6 +10,9 @@ public partial class MainWindow
 {
     private readonly PageBase[] _pages;
 
+    /// <summary>双击 .lbook 启动时传入的账本路径(优先于「上次账本」自动打开)。</summary>
+    internal string? StartupLedgerPath { get; set; }
+
     public MainWindow()
     {
         InitializeComponent();
@@ -36,7 +39,13 @@ public partial class MainWindow
         _fileBtn.Content = App.Ledger is null ? "＋ 打开账本…" : "✕ 关闭账本";
         ShowStartOrContent();
 
-        Loaded += (_, _) => TryAutoOpenLastLedger();
+        Loaded += (_, _) =>
+        {
+            if (StartupLedgerPath is not null)
+                PromptOpen(StartupLedgerPath);
+            else
+                TryAutoOpenLastLedger();
+        };
     }
 
     private void ShowStartOrContent()

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -40,7 +41,21 @@ public partial class App : Application
         ThemeService.Apply(ThemeService.ParseMode(App.Settings.ThemeMode), App.Settings.Accent);
         UiTheme.HookWindowSurfaces();   // 弹出对话框的窗底/默认文字也随主题
 
-        var window = new MainWindow();
+        FileAssociation.EnsureRegistered();   // 首次启动注册 .lbook 双击关联(免管理员)
+
+        // 双击 .lbook 启动:命令行里的账本路径优先打开
+        string? startupPath = null;
+        var args = Environment.GetCommandLineArgs();
+        for (int i = 1; i < args.Length; i++)
+        {
+            if (File.Exists(args[i]) && args[i].EndsWith(".lbook", StringComparison.OrdinalIgnoreCase))
+            {
+                startupPath = args[i];
+                break;
+            }
+        }
+
+        var window = new MainWindow { StartupLedgerPath = startupPath };
         window.Show();
     }
 
