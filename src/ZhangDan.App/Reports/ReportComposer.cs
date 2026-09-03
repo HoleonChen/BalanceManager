@@ -242,7 +242,7 @@ internal static class ReportComposer
             });
         }
         rows.Add(new[] { "净资产合计(启用账户)", "", "", Fmt(net), "" });
-        return new ReportSheet("账户与净资产", new[] { "账户", "类型", "状态", "当前账面(元)", "窗口净变动(元)" }, rows);
+        return new ReportSheet("账户与净资产", new[] { "账户", "类型", "状态", "期末账面(元)", "窗口净变动(元)" }, rows);
     }
 
     private static string TypeLabelShort(string key) => key switch
@@ -350,6 +350,7 @@ internal static class ReportComposer
         sb.Append("\n生成时间:").Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
         sb.Append("\n口径:仅计正常流水(作废/退款不计);转账不计收支;差额调整/校准不计入用途占比、总览单列;未归类分类单列。");
         sb.Append("\n周期报表不含未归属空档账;自定义日期范围含空档。");
+        sb.Append("\n账户与净资产:账面/净资产按报表期末重建(基准+截至期末净变动),非当前快照;停用账户不计净资产。");
         return new ReportSheet("说明", new[] { "说明" },
             sb.ToString().Split('\n').Select(x => new[] { x }).ToList());
     }

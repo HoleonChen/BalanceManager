@@ -115,13 +115,14 @@ FROM transactions t WHERE t.status='normal' AND t.direction<>'transfer' AND t.pe
 
     // ============ 账户与净资产 ============
 
-    /// <summary>各账户当前账面 + 窗口内净变动(不设停用灰显判断,行带 Enabled 由渲染端灰显)。</summary>
+    /// <summary>各账户「截至报表期末」账面 + 窗口内净变动;净资产合计应另用 NetAssetsAt(to)。
+    /// 账面以期末重建(基准+截至期末净变动),而非当前余额——历史周期报表不会拿今天的数当标准。</summary>
     public static IReadOnlyList<AccountLine> AccountsBlock(LedgerSession s, string from, string to)
     {
         var result = new List<AccountLine>();
         foreach (var a in Accounts.ListAll(s))
         {
-            var book = AccountCalibration.BookCents(s, a.Id);
+            var book = AccountCalibration.BookThrough(s, a.Id, to);
             var move = Accounts.MovementBetween(s, a.Id, from, to);
             result.Add(new AccountLine(a.Id, a.Name, a.Type, a.Enabled, book, move.NetCents));
         }
