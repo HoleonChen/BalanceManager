@@ -108,14 +108,40 @@ internal static class ReportCharts
         }
     }
 
+    private static string? _fontName;
+
+    /// <summary>注册一个含中文的字体(Windows 雅黑/黑体),返回可在 FontName 里用的名字;失败回退字符串。</summary>
+    private static string ChineseFont()
+    {
+        if (_fontName is not null)
+            return _fontName;
+        string[] candidates =
+        {
+            @"C:\Windows\Fonts\msyh.ttc",   // 微软雅黑(常规)
+            @"C:\Windows\Fonts\msyh.ttf",
+            @"C:\Windows\Fonts\msyhbd.ttc", // 微软雅黑(粗)
+            @"C:\Windows\Fonts\simhei.ttf"  // 黑体
+        };
+        foreach (var path in candidates)
+        {
+            if (!System.IO.File.Exists(path))
+                continue;
+            try
+            {
+                string name = "ZhangDanCjk" + path.GetHashCode();
+                Fonts.AddFontFile(name, path);
+                _fontName = name;
+                return name;
+            }
+            catch { /* 试下一个 */ }
+        }
+        _fontName = "Microsoft YaHei";   // 注册不了就按名试(可能仍无字形)
+        return _fontName;
+    }
+
     private static void StyleChinese(Plot plot)
     {
-        const string font = "Microsoft YaHei";
-        try
-        {
-            plot.Font.Automatic();   // 自动为各文本元素挑选含中文的字体
-        }
-        catch { /* 低版本无此 API 则忽略,下面仍逐项设 */ }
+        var font = ChineseFont();
         try
         {
             plot.Axes.Left.TickLabelStyle.FontName = font;
@@ -124,7 +150,7 @@ internal static class ReportCharts
             plot.Axes.Bottom.Label.FontName = font;
             plot.Legend.FontName = font;
         }
-        catch { /* 名称差异忽略 */ }
+        catch { /* 低版本字段差异忽略 */ }
     }
 
     private static double[] xsOf(int n)
