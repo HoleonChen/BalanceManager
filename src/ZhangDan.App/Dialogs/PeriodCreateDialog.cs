@@ -127,6 +127,8 @@ internal sealed class PeriodCreateDialog : Window
             SetAutoEnd(AutoEndDate(_start.SelectedDate!.Value));
         }
 
+        if (existing is null)
+            BuildIncomeBody();   // 初始收入仅新建期提供(账户/分类/金额子字段逐行放)
         BuildPoolBody(ledger, _poolFixed);
 
         var ok = new Button { Content = existing is null ? "建立" : "保存", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
@@ -170,6 +172,18 @@ internal sealed class PeriodCreateDialog : Window
             _reserveAmount.Text = "0";
             _incomeBody.IsEnabled = _incomeCheck.IsChecked == true;
         }
+    }
+
+    /// <summary>初始收入块:账户/分类/金额 逐字段成行(此前曾漏建导致勾选后看不到输入)。</summary>
+    private void BuildIncomeBody()
+    {
+        _incomeAccount.Width = 240;
+        _incomeCat.Width = 240;
+        _incomeAmount.Width = 150;
+        _incomeBody.Children.Clear();
+        _incomeBody.Children.Add(SubField("账户", _incomeAccount));
+        _incomeBody.Children.Add(SubField("分类", _incomeCat));
+        _incomeBody.Children.Add(SubField("金额(元)", _incomeAmount));
     }
 
     /// <summary>资金池块:新建/补建 = 账户可选;编辑已有池 = 账户只读,预算/保留可改。</summary>
