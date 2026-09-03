@@ -599,7 +599,7 @@ WHERE 1 = 1");
     }
 
     /// <summary>
-    /// 非负债账户不允许余额为负(零钱/银行/现金…);负债型(信用卡等)以后放开。
+    /// 非负债账户不允许余额为负(零钱/银行/现金…);负债型(信用卡/花呗/白条/金条等,见 AccountKinds)放开。
     /// 快照口径下(账户有 balance_date):基准日之前的流水是纯历史、不参与账面,无法用当前快照校验透支 → 不拦;
     /// 基准日当天起的支出/转出才按「账面=基准+基准日后净变动」拦。基准日为空(重建式/无基准)则从最早起拦。
     /// </summary>
@@ -623,7 +623,7 @@ WHERE 1 = 1");
         cmd.CommandText = "SELECT type FROM accounts WHERE id = $id;";
         cmd.Parameters.AddWithValue("$id", accountId);
         var type = cmd.ExecuteScalar() as string;
-        return type is "credit_card";   // 负债型账户才允许负余额(类型暂未开放)
+        return AccountKinds.IsLiability(type);
     }
 
     /// <summary>取一笔的日期(写保护/回填用);不存在返回 null。</summary>

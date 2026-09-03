@@ -35,6 +35,7 @@ internal static class SelfTest
                 SeedCanonicalCategories(session);   // 新库分类默认空;自检需标准分类支撑断言
                 DataFlow(session, steps);
                 SnapshotOverdraftFlow(session, steps);
+                LiabilityFlow(session, steps);
             }
 
             // 用错误口令打开:应当被拒绝
@@ -165,6 +166,55 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
         }
         catch (InvalidOperationException) { /* 预期:当天透支被拦 */ }
         steps.Add("快照口径:基准日前支出放行、基准日当日透支仍拦");
+    }
+
+    /// <summary>负债账户:信用卡/花呗等可负余额(支出=欠更多、还款=转入归零),普通账户仍拦透支;净资产计入负值。</summary>
+    private static void LiabilityFlow(LedgerSession s, List<string> steps)
+    {
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var bank = Accounts.Insert(s, "还款卡", "bank", "银行", 100_000);
+        var card = Accounts.Insert(s, "信用卡", AccountKinds.CreditCard, "银行", 0);
+
+        // 信用卡花一笔 ¥500 → 账面 -500(欠款)
+        Transactions.Add(s, new TxnDraft
+        {
+            Date = today, Direction = "out", AccountId = card, CategoryId = 8,
+            AmountCents = 50_000, Name = "信用卡消费", Note = "", Channel = "", InPool = false
+        });
+        if (AccountCalibration.BookCents(s, card) != -50_000)
+            throw new Exception("信用卡支出后账面应为 -¥500(欠款)。");
+
+        // 从银行卡转回还款 → 卡归零、卡里剩 ¥500
+        Transactions.Transfer(s, new TransferDraft
+        {
+            Date = today, FromAccountId = bank, ToAccountId = card,
+            PrincipalCents = 50_000, DeltaCents = 0, Kind = "互转", Note = "还款", InPool = false
+        });
+        if (AccountCalibration.BookCents(s, card) != 0)
+            throw new Exception("信用卡还款后账面应归零。");
+        if (AccountCalibration.BookCents(s, bank) != 50_000)
+            throw new Exception("还款卡转出 ¥500 后账面应为 ¥500。");
+
+        // 花呗开账即欠 ¥1,200(base 负)直接允许;净资产随之下调
+        var netBase = Accounts.NetAssets(s);
+        Accounts.Insert(s, "花呗", AccountKinds.HuaBei, "支付宝", -120_000);
+        if (Accounts.NetAssets(s) != netBase - 120_000)
+            throw new Exception("花呗(欠 ¥1200)应计入净资产为负。");
+
+        // 普通钱包仍拦透支
+        var wallet = Accounts.Insert(s, "零钱包", "wallet", "微信", 0);
+        try
+        {
+            Transactions.Add(s, new TxnDraft
+            {
+                Date = today, Direction = "out", AccountId = wallet, CategoryId = 8,
+                AmountCents = 100, Name = "透支支出", Note = "", Channel = "", InPool = false
+            });
+            throw new Exception("普通账户透支支出未被拦截。");
+        }
+        catch (InvalidOperationException) { /* 预期 */ }
+
+        steps.Add("负债:信用卡/花呗可负余额、还款归零、净资产计负、普通账户仍拦");
     }
 
     /// <summary>流水/周期/作废 数据流断言;任何不符即抛错。</summary>

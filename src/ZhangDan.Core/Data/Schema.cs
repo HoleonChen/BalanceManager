@@ -11,7 +11,8 @@ internal static class Schema
 {
     // v3:资金池落地——每周期至多一个池(单池,fund_pools.period_id 唯一)。
     // v4:分类显式 kind(income/expense)——分类管理(新建/合并/删除)后不再能靠 id 区间 10–14 判收支。
-    public const int CurrentVersion = 4;
+    // v5:账户 type 放开为自由串(去掉 CHECK),以支持负债账户(credit_card/hua_bei/bai_tiao/jin_tiao/credit 等)。
+    public const int CurrentVersion = 5;
 
     // 注意:Microsoft.Data.Sqlite 一条命令只执行首条语句,故统一按 ';' 切分逐条执行。
     private const string Ddl = @"
@@ -34,9 +35,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
   name               TEXT NOT NULL,
   platform           TEXT,                  -- 微信/支付宝/银行/投资/现金/储值卡
-  type               TEXT NOT NULL
-                     CHECK (type IN ('wallet', 'money_fund', 'bank', 'cash',
-                                     'fixed_deposit', 'fund', 'prepaid')),
+  type               TEXT NOT NULL,         -- 合法取值见 AccountKinds(schema v5 起不再 CHECK,放开负债型)
   enabled            INTEGER NOT NULL DEFAULT 1,
   balance_base_cents INTEGER NOT NULL DEFAULT 0,
   balance_date       TEXT,
@@ -156,6 +155,29 @@ CREATE TABLE IF NOT EXISTS calibration_log (
             ExecEach(conn, "ALTER TABLE categories ADD COLUMN kind TEXT;");
             ExecEach(conn, "UPDATE categories SET kind = 'expense' WHERE id BETWEEN 1 AND 9;");
             ExecEach(conn, "UPDATE categories SET kind = 'income'  WHERE id BETWEEN 10 AND 14;");
+        }
+
+        if (version < 5)
+        {
+            // v5:重建 accounts 去掉 type 的 CHECK 约束(放开负债型账户)。
+            // 外键/引用由 id 维持,须在事务外关掉 FK 再重建再开。
+            ExecEach(conn, @"
+PRAGMA foreign_keys = OFF;
+CREATE TABLE accounts_v5 (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  name               TEXT NOT NULL,
+  platform           TEXT,
+  type               TEXT NOT NULL,
+  enabled            INTEGER NOT NULL DEFAULT 1,
+  balance_base_cents INTEGER NOT NULL DEFAULT 0,
+  balance_date       TEXT,
+  sort_order         INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO accounts_v5 (id, name, platform, type, enabled, balance_base_cents, balance_date, sort_order)
+  SELECT id, name, platform, type, enabled, balance_base_cents, balance_date, sort_order FROM accounts;
+DROP TABLE accounts;
+ALTER TABLE accounts_v5 RENAME TO accounts;
+PRAGMA foreign_keys = ON;");
         }
 
         if (version < CurrentVersion)

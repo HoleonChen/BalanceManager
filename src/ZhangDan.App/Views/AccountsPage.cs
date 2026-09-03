@@ -521,6 +521,11 @@ internal sealed class AccountsPage : PageBase
         "fixed_deposit" => "定存(整存整取)",
         "fund" => "基金",
         "prepaid" => "储值卡(水卡等)",
+        "credit_card" => "信用卡(负债)",
+        "hua_bei" => "花呗(负债)",
+        "bai_tiao" => "白条(负债)",
+        "jin_tiao" => "京东金条(负债)",
+        "credit" => "其他信用额度/负债",
         _ => key
     };
 }
@@ -532,7 +537,10 @@ internal sealed class AccountCreateDialog : Window
     {
         ("钱包(零钱/余额)", "wallet"), ("货币基金(零钱通/余额宝)", "money_fund"),
         ("银行卡", "bank"), ("现金", "cash"), ("定存(整存整取)", "fixed_deposit"),
-        ("基金", "fund"), ("储值卡(水卡等)", "prepaid")
+        ("基金", "fund"), ("储值卡(水卡等)", "prepaid"),
+        ("信用卡(负债)", "credit_card"), ("花呗(负债)", "hua_bei"),
+        ("白条(负债)", "bai_tiao"), ("京东金条(负债)", "jin_tiao"),
+        ("其他信用额度/负债", "credit")
     };
     private static readonly string[] Platforms = { "微信", "支付宝", "银行", "投资", "现金", "储值卡" };
 
@@ -541,6 +549,7 @@ internal sealed class AccountCreateDialog : Window
     private readonly ComboBox _platform = new() { Width = 300, IsEditable = true };
     private readonly TextBox _balance = new() { Width = 300 };
     private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _liabilityHint = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(140, 0, 0, 2) };
 
     public string AccountName => _name.Text.Trim();
     public string TypeKey => Types[_type.SelectedIndex].Key;
@@ -559,6 +568,8 @@ internal sealed class AccountCreateDialog : Window
         foreach (var (label, _) in Types)
             _type.Items.Add(label);
         _type.SelectedIndex = 0;
+        _type.SelectionChanged += (_, _) => UpdateTypeHint();
+        UpdateTypeHint();
         foreach (var p in Platforms)
             _platform.Items.Add(p);
         _platform.SelectedIndex = 0;
@@ -587,6 +598,7 @@ internal sealed class AccountCreateDialog : Window
         var panel = new StackPanel { Margin = new Thickness(20) };
         panel.Children.Add(Row("名称", _name));
         panel.Children.Add(Row("类型", _type));
+        panel.Children.Add(_liabilityHint);
         panel.Children.Add(Row("平台", _platform));
         if (existing is null)
             panel.Children.Add(Row("当前余额(可选,元)", _balance));   // 余额只走「校准」,编辑时不显示
@@ -603,6 +615,18 @@ internal sealed class AccountCreateDialog : Window
         d.Children.Add(text);
         d.Children.Add(input);
         return d;
+    }
+
+    /// <summary>负债型类型显示提示(当前余额可填负)。</summary>
+    private void UpdateTypeHint()
+    {
+        bool liability = _type.SelectedIndex >= 0
+                         && AccountKinds.IsLiability(Types[_type.SelectedIndex].Key);
+        _liabilityHint.Text = liability
+            ? "负债账户:当前余额填负值 = 尚欠(如 -1200 表示欠 ¥1,200);此后记支出=欠得更多,还款=从别的账户转入。"
+            : "";
+        if (liability)
+            _liabilityHint.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
     }
 
     private void Accept()

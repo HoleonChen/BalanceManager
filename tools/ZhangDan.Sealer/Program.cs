@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using ZhangDan;
@@ -250,8 +251,7 @@ internal static class Importer
     private static string InsertAccounts(LedgerSession s, JsonElement root)
     {
         var list = Arr(root, "accounts");
-        var kinds = new HashSet<string>(
-            new[] { "wallet", "money_fund", "bank", "cash", "fixed_deposit", "fund", "prepaid" });
+        var kinds = AccountKinds.Asset.Concat(AccountKinds.Liability);
         for (int i = 0; i < list.Length; i++)
         {
             var o = list[i];
@@ -260,7 +260,7 @@ internal static class Importer
                 throw Err(i, "accounts", $"账户名重复:{name}");
             var type = Str(o, "type", "wallet");
             if (!kinds.Contains(type))
-                throw Err(i, "accounts", $"账户 type 非法:{type}(合法:wallet/money_fund/bank/cash/fixed_deposit/fund/prepaid)");
+                throw Err(i, "accounts", $"账户 type 非法:{type}(合法:{string.Join('/', kinds)})");
             var platform = Str(o, "platform", "");
             var baseCents = ToCents(OptMoney(o, "balanceBase"), 0);
             var id = Accounts.Insert(s, name, type, platform, baseCents);
