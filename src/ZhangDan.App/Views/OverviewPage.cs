@@ -11,7 +11,7 @@ using WGridView = Wpf.Ui.Controls.GridView;
 using WGridViewColumn = Wpf.Ui.Controls.GridViewColumn;
 namespace ZhangDan.App.Views;
 
-/// <summary>总览页(排第一,吸收今日记账):摘要带(周期/资金池/净资产)+ 选定日流水(记/转/双击编辑/作废)+ 右侧自然月月历。</summary>
+/// <summary>总览页(排第一,吸收今日记账):摘要带(周期/资金池)+ 选定日流水(记/转/双击编辑/作废)+ 右侧自然月月历。净资产不在此展示(隐私,见「账户」页门禁)。</summary>
 internal sealed class OverviewPage : PageBase
 {
     /// <summary>让主窗切页(1 流水 /2 周期)。总览页自己不持有 MainWindow。</summary>
@@ -167,30 +167,19 @@ internal sealed class OverviewPage : PageBase
         RefreshCalendar();
     }
 
-    /// <summary>摘要带(锚今天):周期状态 + 资金池预算/进度 + 净资产。</summary>
+    /// <summary>摘要带(锚今天):周期状态 + 资金池预算/进度。净资产不给看(隐私,账户页才可看)。</summary>
     private void RefreshSummaryBand()
     {
         _bandContent.Children.Clear();
         var today = DateTime.Today.ToString("yyyy-MM-dd");
 
+        // 隐私:净资产不进总览(想看请进「账户」页,那里有口令二次验证)
         var chip = PeriodChipFor(today);
         var topRow = new StackPanel { Orientation = Orientation.Horizontal };
         chip.Margin = new Thickness(0, 0, 16, 0);
         chip.VerticalAlignment = VerticalAlignment.Center;
         topRow.Children.Add(chip);
-
-        var net = new TextBlock
-        {
-            Text = $"净资产(启用账户):{Money.Yuan(Accounts.NetAssets(S))}",
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        net.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSection);
-        var topRowDock = new DockPanel { LastChildFill = false };
-        DockPanel.SetDock(net, Dock.Right);
-        topRowDock.Children.Add(net);
-        topRowDock.Children.Add(topRow);
-        _bandContent.Children.Add(topRowDock);
+        _bandContent.Children.Add(topRow);
 
         // 池:已设置 → 进度条 + 预算/已花/剩余/可支配;未设置 → 灰字引导去周期页
         var p = Periods.GetCoveringActive(S, today);

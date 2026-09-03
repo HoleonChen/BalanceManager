@@ -83,8 +83,20 @@ public partial class MainWindow
     {
         if (index < 0 || index >= _pages.Length)
             return;
+        // 隐私:账户页每次进入需口令二次验证(防窥屏)
+        if (index == 3 && _pages[3] is AccountsPage && !AccountsGatePassed())
+            return;
         _content.Content = _pages[index];
         _pages[index].OnShown();
+    }
+
+    /// <summary>账户页口令门禁:再次输入本账本口令通过才放行(每次进入都弹)。</summary>
+    private bool AccountsGatePassed()
+    {
+        if (App.Ledger is null)
+            return false;
+        var dlg = new Dialogs.AccountUnlockDialog(App.Ledger.Path) { Owner = this };
+        return dlg.ShowDialog() == true;
     }
 
     private void FileAction_Click(object sender, RoutedEventArgs e)
