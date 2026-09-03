@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using ZhangDan.App.Dialogs;
 
 using WListView = Wpf.Ui.Controls.ListView;
@@ -82,7 +83,7 @@ internal sealed class AccountsPage : PageBase
         gv.Columns.Add(new WGridViewColumn { Header = "平台", Width = 110, DisplayMemberBinding = Bind("Platform") });
         gv.Columns.Add(new WGridViewColumn { Header = "当前余额(派生)", Width = 140, DisplayMemberBinding = Bind("Balance") });
         _list.View = gv;
-        _list.ItemContainerStyle = DisabledRowStyle();
+        _list.ItemContainerStyle = RowItemStyle();
         _list.Margin = new Thickness(20, 0, 20, 12);
         _list.SelectionMode = SelectionMode.Single;
         _list.MouseDoubleClick += (_, _) => Toggle(!(Selected()?.A.Enabled ?? true));
@@ -116,17 +117,25 @@ internal sealed class AccountsPage : PageBase
 
     private static System.Windows.Data.Binding Bind(string p) => new(p) { Mode = System.Windows.Data.BindingMode.OneWay };
 
-    /// <summary>停用账户行灰显(整行降透明度+灰字),启用行保持正常。</summary>
-    private static Style DisabledRowStyle()
+    /// <summary>账户行样式:启用/停用都带主题文字前景(停用整行降透明度即灰显,启用正常)。</summary>
+    private static Style RowItemStyle()
     {
         var s = new Style(typeof(ListViewItem));
         var off = new DataTrigger { Binding = new System.Windows.Data.Binding("A.Enabled"), Value = false };
         off.Setters.Add(new Setter(Control.OpacityProperty, 0.65));
         s.Triggers.Add(off);
+        // 行项前景:烘焙当前主题主文字(此表自定义了 ItemContainerStyle,会顶掉 WPF-UI 行项默认前景,
+        // 必须显式给,否则深色下仍是黑字);OnShown 每次切回重设 → 深浅切换后再进入即用新色。
+        if (Application.Current.FindResource(UiKeys.TextPrimary) is Brush fg)
+            s.Setters.Add(new Setter(Control.ForegroundProperty, fg));
         return s;
     }
 
-    public override void OnShown() => Reload();
+    public override void OnShown()
+    {
+        _list.ItemContainerStyle = RowItemStyle();
+        Reload();
+    }
 
     private Row? Selected() => _list.SelectedItem as Row;
 
