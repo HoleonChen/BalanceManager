@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using ZhangDan.App.Dialogs;
 
 namespace ZhangDan.App.Views;
@@ -19,9 +18,9 @@ internal sealed class OverviewPage : PageBase
     private LedgerSession S => App.Ledger!;
 
     private readonly TextBlock _dateLabel = new() { FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _daySummary = new() { Foreground = Brushes.Gray, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _monthSummary = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
-    private readonly Border _summaryBand = new() { Padding = new Thickness(12, 8, 12, 8), BorderBrush = Brushes.Gainsboro, BorderThickness = new Thickness(0, 0, 0, 1) };
+    private readonly TextBlock _daySummary = new() { Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _monthSummary = new() { Margin = new Thickness(0, 6, 0, 0) };
+    private readonly Border _summaryBand = new() { Padding = new Thickness(12, 8, 12, 8), BorderThickness = new Thickness(0, 0, 0, 1) };
     private readonly StackPanel _bandContent = new();
     private readonly ListView _list = new();
     private readonly MonthCalendar _calendar = new();
@@ -29,6 +28,9 @@ internal sealed class OverviewPage : PageBase
     public OverviewPage()
     {
         BuildUi();
+        _daySummary.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
+        _monthSummary.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
+        _summaryBand.SetResourceReference(Border.BorderBrushProperty, UiKeys.Divider);
     }
 
     public override void OnShown()
@@ -178,9 +180,9 @@ internal sealed class OverviewPage : PageBase
         {
             Text = $"净资产(启用账户):{Money.Yuan(Accounts.NetAssets(S))}",
             FontWeight = FontWeights.SemiBold,
-            Foreground = Brushes.DimGray,
             VerticalAlignment = VerticalAlignment.Center
         };
+        net.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSection);
         var topRowDock = new DockPanel { LastChildFill = false };
         DockPanel.SetDock(net, Dock.Right);
         topRowDock.Children.Add(net);
@@ -195,10 +197,10 @@ internal sealed class OverviewPage : PageBase
             var hint = new TextBlock
             {
                 Text = "资金池未设置 · 点此到周期页补建",
-                Foreground = Brushes.Gray,
                 Cursor = Cursors.Hand,
                 Margin = new Thickness(0, 4, 0, 0)
             };
+            hint.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
             hint.MouseLeftButtonUp += (_, _) => GoTo?.Invoke(2);
             _bandContent.Children.Add(hint);
         }
@@ -211,9 +213,10 @@ internal sealed class OverviewPage : PageBase
             var txt = new TextBlock
             {
                 Text = $"池 · 预算 {Money.Yuan(pool.BudgetCents)} / 已花 {Money.Yuan(st.SpentCents)} / 剩余 {Money.Yuan(st.RemainingCents)} / 可支配 {Money.Yuan(st.DisposableCents)}",
-                Foreground = st.DisposableCents < 0 ? Brushes.Firebrick : Brushes.Gray,
                 Margin = new Thickness(0, 3, 0, 0)
             };
+            txt.SetResourceReference(TextBlock.ForegroundProperty,
+                st.DisposableCents < 0 ? UiKeys.Expense : UiKeys.TextSecondary);
             var poolCol = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
             poolCol.Children.Add(bar);
             poolCol.Children.Add(txt);
@@ -232,10 +235,10 @@ internal sealed class OverviewPage : PageBase
             var chip = new TextBlock
             {
                 Text = $"周期 · {p.Name} ({Short(p.StartDate)}~{(p.EndDate is null ? "长期" : Short(p.EndDate))})",
-                Foreground = Brushes.SteelBlue,
                 Cursor = Cursors.Hand,
                 FontWeight = FontWeights.SemiBold
             };
+            chip.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Accent);
             chip.MouseLeftButtonUp += (_, _) => GoTo?.Invoke(1);
             return chip;
         }
@@ -245,19 +248,19 @@ internal sealed class OverviewPage : PageBase
             var chip2 = new TextBlock
             {
                 Text = $"上一周期「{expired.Name}」已到期未封存 · 点此处理",
-                Foreground = Brushes.DarkOrange,
                 Cursor = Cursors.Hand,
                 FontWeight = FontWeights.SemiBold
             };
+            chip2.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Warn);
             chip2.MouseLeftButtonUp += (_, _) => GoTo?.Invoke(2);
             return chip2;
         }
         var chip3 = new TextBlock
         {
             Text = "无进行中周期 · 点此新建",
-            Foreground = Brushes.Gray,
             Cursor = Cursors.Hand
         };
+        chip3.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
         chip3.MouseLeftButtonUp += (_, _) => GoTo?.Invoke(2);
         return chip3;
     }
@@ -268,16 +271,18 @@ internal sealed class OverviewPage : PageBase
         if (budgetCents <= 0)
             return new Border();
         const double total = 240;
-        var track = new Border { Width = total, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Color.FromRgb(0xE3, 0xE7, 0xEC)), Child = null };
+        var track = new Border { Width = total, Height = 8, CornerRadius = new CornerRadius(4), Child = null };
+        track.SetResourceReference(Border.BackgroundProperty, UiKeys.ControlTrack);
         var frac = Math.Min(1.0, (double)spentCents / budgetCents);
         var fill = new Border
         {
             Width = total * frac,
             Height = 8,
             CornerRadius = new CornerRadius(4),
-            Background = spentCents > budgetCents ? Brushes.Firebrick : Brushes.SteelBlue,
             HorizontalAlignment = HorizontalAlignment.Left
         };
+        fill.SetResourceReference(Border.BackgroundProperty,
+            spentCents > budgetCents ? UiKeys.Error : UiKeys.Accent);
         var grid = new Grid();
         grid.Children.Add(track);
         grid.Children.Add(fill);

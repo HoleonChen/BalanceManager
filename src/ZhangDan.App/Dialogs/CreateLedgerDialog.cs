@@ -13,7 +13,7 @@ internal sealed class CreateLedgerDialog : Window
     private readonly TextBox _pathBox;
     private readonly PasswordBox _passwordBox = new();
     private readonly PasswordBox _confirmBox = new();
-    private readonly TextBlock _error = new() { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap };
 
     public string LedgerName => _nameBox.Text.Trim();
     public string Password => _passwordBox.Password;
@@ -26,6 +26,7 @@ internal sealed class CreateLedgerDialog : Window
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
+        _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
 
         _pathBox = new TextBox { Text = Path.Combine(AppPaths.UserDataDir, "我的账本.lbook") };
         _nameBox.TextChanged += (_, _) => SyncNameToPath();
@@ -59,9 +60,9 @@ internal sealed class CreateLedgerDialog : Window
         var hint = new TextBlock
         {
             Text = "口令即密钥,遗忘无法找回,请务必记牢。",
-            Foreground = System.Windows.Media.Brushes.Gray,
             Margin = new Thickness(0, 0, 0, 4)
         };
+        hint.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
         _error.Margin = new Thickness(0, 8, 0, 0);
         panel.Children.Add(hint);
         panel.Children.Add(_error);

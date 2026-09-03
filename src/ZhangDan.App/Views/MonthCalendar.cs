@@ -46,7 +46,8 @@ internal sealed class MonthCalendar : UserControl
         for (int i = 0; i < 7; i++)
         {
             headRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var w = new TextBlock { Text = Weekdays[i], HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12, Foreground = Brushes.Gray };
+            var w = new TextBlock { Text = Weekdays[i], HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12 };
+            w.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
             Grid.SetColumn(w, i);
             headRow.Children.Add(w);
         }
@@ -77,7 +78,6 @@ internal sealed class MonthCalendar : UserControl
         int lead = ((int)first.DayOfWeek + 6) % 7;   // 周一为首列
         var todayIso = DateTime.Today.ToString("yyyy-MM-dd");
         string? selIso = selected?.ToString("yyyy-MM-dd");
-        var blank = new SolidColorBrush(Color.FromRgb(0xF3, 0xF4, 0xF6));
 
         for (int i = 0; i < 42; i++)
         {
@@ -90,7 +90,8 @@ internal sealed class MonthCalendar : UserControl
             if (day is null)
             {
                 // 留白位:维持周对齐,不显示邻月灰字
-                bg = new Border { Background = blank, Margin = new Thickness(1) };
+                bg = new Border { Margin = new Thickness(1) };
+                bg.SetResourceReference(Border.BackgroundProperty, UiKeys.CalendarBlankCell);
             }
             else
             {
@@ -105,9 +106,10 @@ internal sealed class MonthCalendar : UserControl
                     FontSize = 13,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Margin = new Thickness(0, 2, 4, 0),
-                    FontWeight = isToday || isSelected ? FontWeights.Bold : FontWeights.Normal,
-                    Foreground = isToday ? Brushes.SteelBlue : inPeriod ? Brushes.Black : Brushes.Gray
+                    FontWeight = isToday || isSelected ? FontWeights.Bold : FontWeights.Normal
                 };
+                dayText.SetResourceReference(TextBlock.ForegroundProperty,
+                    isToday ? UiKeys.Accent : inPeriod ? UiKeys.TextPrimary : UiKeys.TextSecondary);
 
                 string? outLine = null, inLine = null;
                 if (_money.TryGetValue(iso, out var mv))
@@ -119,9 +121,9 @@ internal sealed class MonthCalendar : UserControl
                 var stack = new StackPanel();
                 stack.Children.Add(dayText);
                 if (outLine is not null)
-                    stack.Children.Add(Small(outLine, Brushes.Firebrick));
+                    stack.Children.Add(Small(outLine, UiKeys.Expense));
                 if (inLine is not null)
-                    stack.Children.Add(Small(inLine, Brushes.SeaGreen));
+                    stack.Children.Add(Small(inLine, UiKeys.Income));
                 if (outLine is null && inLine is null)
                     stack.Children.Add(new Border { Height = 15 });
 
@@ -129,15 +131,19 @@ internal sealed class MonthCalendar : UserControl
                 {
                     Child = stack,
                     Margin = new Thickness(1),
-                    Background = isToday ? new SolidColorBrush(Color.FromRgb(0xEA, 0xF2, 0xFB))
-                        : inPeriod ? new SolidColorBrush(Color.FromRgb(0xF4, 0xF8, 0xFC)) : Brushes.Transparent,
-                    BorderBrush = isSelected ? Brushes.SteelBlue : Brushes.Transparent,
+                    Background = Brushes.Transparent,
+                    BorderBrush = Brushes.Transparent,
                     BorderThickness = isSelected ? new Thickness(2) : new Thickness(0),
                     Cursor = Cursors.Hand,
                     ToolTip = $"{(inPeriod ? "" : "周期外 ")}{iso}\n" +
                               (outLine is null && inLine is null ? "无收支记录"
                                   : $"支出{(outLine ?? "0")} · 收入{(inLine is null ? "+0" : inLine)}")
                 };
+                if (isToday || inPeriod)
+                    bg.SetResourceReference(Border.BackgroundProperty,
+                        isToday ? UiKeys.CalendarTodayBg : UiKeys.CalendarPeriodBg);
+                if (isSelected)
+                    bg.SetResourceReference(Border.BorderBrushProperty, UiKeys.Accent);
                 var chosen = day.Value;
                 bg.MouseLeftButtonUp += (_, _) => DayChosen?.Invoke(chosen);
             }
@@ -147,12 +153,16 @@ internal sealed class MonthCalendar : UserControl
         }
     }
 
-    private static TextBlock Small(string text, Brush color) => new()
+    private static TextBlock Small(string text, string key)
     {
-        Text = text,
-        FontSize = 9,
-        Foreground = color,
-        HorizontalAlignment = HorizontalAlignment.Right,
-        Margin = new Thickness(0, 0, 4, 0)
-    };
+        var t = new TextBlock
+        {
+            Text = text,
+            FontSize = 9,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 0, 4, 0)
+        };
+        t.SetResourceReference(TextBlock.ForegroundProperty, key);
+        return t;
+    }
 }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using ZhangDan.App.Dialogs;
 
 namespace ZhangDan.App.Views;
@@ -22,7 +21,7 @@ internal sealed class FlowPage : PageBase
     private readonly ComboBox _catBox = new() { Width = 124 };
     private readonly CheckBox _cancelledCheck = new() { Content = "含作废", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 8, 8, 0) };
     private readonly TextBox _kwBox = new() { Width = 140 };
-    private readonly TextBlock _summary = new() { Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+    private readonly TextBlock _summary = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
     private readonly StackPanel _groups = new();
     private readonly ScrollViewer _scroll;
     private bool _suppress;
@@ -81,6 +80,7 @@ internal sealed class FlowPage : PageBase
         Grid.SetRow(_scroll, 1);
         grid.Children.Add(top);
         grid.Children.Add(_scroll);
+        _summary.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
         Content = grid;
     }
 
@@ -88,7 +88,8 @@ internal sealed class FlowPage : PageBase
     {
         public LabelBox(string label, UIElement input)
         {
-            var t = new TextBlock { Text = label, Width = 42, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray };
+            var t = new TextBlock { Text = label, Width = 42, VerticalAlignment = VerticalAlignment.Center };
+            t.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
             Margin = new Thickness(0, 0, 10, 0);
             DockPanel.SetDock(t, Dock.Left);
             Children.Add(t);
@@ -369,9 +370,9 @@ internal sealed class FlowPage : PageBase
             Text = $"{(rel.Length > 0 ? rel + " " : "")}{Short(date)} {wk}"
                 + (dOut > 0 || dIn > 0 ? $"   支出 {Money.Yuan(dOut)} · 收入 {Money.Yuan(dIn)} · {dayRows.Count} 笔" : ""),
             FontWeight = FontWeights.SemiBold,
-            Foreground = Brushes.SteelBlue,
             Margin = new Thickness(2, 10, 0, 2)
         };
+        header.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Accent);
 
         var list = new ListView { ItemsSource = dayRows, SelectionMode = SelectionMode.Single };
         var gv = new GridView();
@@ -388,13 +389,14 @@ internal sealed class FlowPage : PageBase
         var inner = new StackPanel();
         inner.Children.Add(header);
         inner.Children.Add(list);
-        return new Border
+        var wrap = new Border
         {
             Child = inner,
-            BorderBrush = Brushes.Gainsboro,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Margin = new Thickness(0, 0, 0, 2)
         };
+        wrap.SetResourceReference(Border.BorderBrushProperty, UiKeys.Divider);
+        return wrap;
     }
 
     private ContextMenu RowMenu(ListView list)

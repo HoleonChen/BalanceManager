@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using ZhangDan.App.Dialogs;
 
 namespace ZhangDan.App.Views;
@@ -87,7 +86,7 @@ internal sealed class AccountsPage : PageBase
 
         _list.SelectionChanged += (_, _) => ShowDetail(Selected());
 
-        _detail.BorderBrush = Brushes.LightGray;
+        _detail.SetResourceReference(Border.BorderBrushProperty, UiKeys.Divider);
         _detail.BorderThickness = new Thickness(0, 1, 0, 0);
         _detail.Padding = new Thickness(20, 10, 20, 14);
         _detail.Child = new ScrollViewer
@@ -119,7 +118,6 @@ internal sealed class AccountsPage : PageBase
     {
         var s = new Style(typeof(ListViewItem));
         var off = new DataTrigger { Binding = new System.Windows.Data.Binding("A.Enabled"), Value = false };
-        off.Setters.Add(new Setter(Control.ForegroundProperty, SystemColors.GrayTextBrush));
         off.Setters.Add(new Setter(Control.OpacityProperty, 0.65));
         s.Triggers.Add(off);
         return s;
@@ -297,21 +295,23 @@ internal sealed class AccountsPage : PageBase
         var s = S;
         var id = row.A.Id;
 
-        var name = new TextBlock { Text = row.A.Name, FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = Brushes.SteelBlue };
+        var name = new TextBlock { Text = row.A.Name, FontSize = 16, FontWeight = FontWeights.SemiBold };
+        name.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Accent);
         var meta = new TextBlock
         {
             Text = $"{TypeLabel(row.A.Type)} · 平台 {row.A.Platform}",
-            Foreground = Brushes.Gray,
             Margin = new Thickness(10, 2, 0, 0),
             VerticalAlignment = VerticalAlignment.Bottom
         };
+        meta.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
         var status = new TextBlock
         {
             Text = row.A.Enabled ? "启用中" : "已停用(不计净资产)",
-            Foreground = row.A.Enabled ? Brushes.SeaGreen : Brushes.Gray,
             Margin = new Thickness(12, 2, 0, 0),
             VerticalAlignment = VerticalAlignment.Bottom
         };
+        status.SetResourceReference(TextBlock.ForegroundProperty,
+            row.A.Enabled ? UiKeys.Success : UiKeys.TextSecondary);
         var head = new StackPanel { Orientation = Orientation.Horizontal };
         head.Children.Add(name);
         head.Children.Add(meta);
@@ -326,11 +326,12 @@ internal sealed class AccountsPage : PageBase
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 8, 0, 2)
         });
-        body.Children.Add(new TextBlock
+        var baseLine = new TextBlock
         {
-            Text = $"基准余额:{Money.Yuan(baseCents)} · 基准日:{(baseDate is null ? "(自建账起算)" : baseDate)}",
-            Foreground = Brushes.Gray
-        });
+            Text = $"基准余额:{Money.Yuan(baseCents)} · 基准日:{(baseDate is null ? "(自建账起算)" : baseDate)}"
+        };
+        baseLine.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
+        body.Children.Add(baseLine);
 
         body.Children.Add(Rule());
 
@@ -380,23 +381,36 @@ internal sealed class AccountsPage : PageBase
         _detail.Visibility = Visibility.Visible;
     }
 
-    private static UIElement Rule() => new Border { Height = 1, Background = Brushes.Gainsboro, Margin = new Thickness(0, 6, 0, 6) };
-
-    private static TextBlock Section(string text) => new()
+    private static UIElement Rule()
     {
-        Text = text,
-        FontWeight = FontWeights.SemiBold,
-        Foreground = Brushes.DimGray,
-        Margin = new Thickness(0, 2, 0, 2)
-    };
+        var rule = new Border { Height = 1, Margin = new Thickness(0, 6, 0, 6) };
+        rule.SetResourceReference(Border.BackgroundProperty, UiKeys.Divider);
+        return rule;
+    }
 
-    private static TextBlock Line(string text, bool gray = false) => new()
+    private static TextBlock Section(string text)
     {
-        Text = text,
-        Foreground = gray ? Brushes.Gray : System.Windows.Media.Brushes.Black,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 0, 0, 2)
-    };
+        var t = new TextBlock
+        {
+            Text = text,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 2, 0, 2)
+        };
+        t.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSection);
+        return t;
+    }
+
+    private static TextBlock Line(string text, bool gray = false)
+    {
+        var t = new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
+        t.SetResourceReference(TextBlock.ForegroundProperty, gray ? UiKeys.TextSecondary : UiKeys.TextPrimary);
+        return t;
+    }
 
     private static string Short(string iso)
     {
@@ -500,7 +514,7 @@ internal sealed class AccountCreateDialog : Window
     private readonly ComboBox _type = new() { Width = 300 };
     private readonly ComboBox _platform = new() { Width = 300, IsEditable = true };
     private readonly TextBox _balance = new() { Width = 300 };
-    private readonly TextBlock _error = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap };
 
     public string AccountName => _name.Text.Trim();
     public string TypeKey => Types[_type.SelectedIndex].Key;
@@ -514,6 +528,7 @@ internal sealed class AccountCreateDialog : Window
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
+        _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
 
         foreach (var (label, _) in Types)
             _type.Items.Add(label);
@@ -661,14 +676,15 @@ internal sealed class CalibrateDialog : Window
             first = false;
             _radios.Add((rb, key));
             body.Children.Add(rb);
-            body.Children.Add(new TextBlock
+            var descText = new TextBlock
             {
                 Text = desc,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = Brushes.Gray,
                 FontSize = 12,
                 Margin = new Thickness(22, 0, 0, 6)
-            });
+            };
+            descText.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
+            body.Children.Add(descText);
         }
 
         body.Children.Add(new TextBlock { Text = "备注(可空,写入校准审计)", Margin = new Thickness(0, 4, 0, 4) });
@@ -692,14 +708,14 @@ internal sealed class CalibrateDialog : Window
         if (!TryParse(_actual.Text, out var yuan))
         {
             _diff.Text = "实际余额请填数字(元)。";
-            _diff.Foreground = Brushes.Firebrick;
+            _diff.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
             return;
         }
         var diff = Money.ToCents(yuan) - _bookCents;
         _diff.Text = diff == 0
             ? "差额:0 —— 账面与实际一致,无需调整。"
             : $"差额:{Money.Yuan(diff)}(实际 − 账面)。{(diff > 0 ? "账面少记了钱" : "账面多记了钱")}";
-        _diff.Foreground = diff == 0 ? Brushes.SeaGreen : Brushes.DarkOrange;
+        _diff.SetResourceReference(TextBlock.ForegroundProperty, diff == 0 ? UiKeys.Success : UiKeys.Warn);
     }
 
     private static bool TryParse(string text, out decimal v)
@@ -713,7 +729,7 @@ internal sealed class CalibrateDialog : Window
         if (!TryParse(_actual.Text, out var yuan))
         {
             _diff.Text = "实际余额请填数字(元)。";
-            _diff.Foreground = Brushes.Firebrick;
+            _diff.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
             return;
         }
         ActualCents = Money.ToCents(yuan);
@@ -730,5 +746,10 @@ internal sealed class CalibrateDialog : Window
         return d;
     }
 
-    private static UIElement Rule() => new Border { Height = 1, Background = Brushes.Gainsboro, Margin = new Thickness(0, 10, 0, 8) };
+    private static UIElement Rule()
+    {
+        var rule = new Border { Height = 1, Margin = new Thickness(0, 10, 0, 8) };
+        rule.SetResourceReference(Border.BackgroundProperty, UiKeys.Divider);
+        return rule;
+    }
 }

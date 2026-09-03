@@ -1,6 +1,5 @@
 using System.Threading.Tasks;
 using System.Windows;
-using Wpf.Ui.Appearance;
 
 namespace ZhangDan.App;
 
@@ -37,8 +36,8 @@ public partial class App : Application
         Log.Configure(Log.ParseLevel(App.Settings.LogLevel), AppPaths.LogDir, console: false);
         HookGlobalErrors();
 
-        // 跟随系统深浅色(WPF-UI)
-        ApplicationThemeManager.Apply(ApplicationThemeManager.GetAppTheme());
+        // 外观(浅/深/跟随系统 + 强调色)——统一走 ThemeService
+        ThemeService.Apply(ThemeService.ParseMode(App.Settings.ThemeMode), App.Settings.Accent);
 
         var window = new MainWindow();
         window.Show();

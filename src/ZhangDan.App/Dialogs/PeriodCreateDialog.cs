@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 
 namespace ZhangDan.App.Dialogs;
 
@@ -39,7 +38,6 @@ internal sealed class PeriodCreateDialog : Window
     private readonly TextBlock _reserveHint = new()
     {
         Text = "保留 ≤ 资金池大小(预算);建议 ≤ 预算的一半。",
-        Foreground = Brushes.Gray,
         FontSize = 12,
         Margin = new Thickness(24, 0, 0, 2),
         TextWrapping = TextWrapping.Wrap
@@ -49,7 +47,7 @@ internal sealed class PeriodCreateDialog : Window
     private bool _settingEnd;   // SetAutoEnd 期间置位,避免把程序设值误判为“用户手动挑过”
     private bool _endManual;    // 用户手动挑过结束日 → 结束日不再随开始日自动推
 
-    private readonly TextBlock _error = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap };
 
     public string PeriodName => _name.Text.Trim();
     public string StartDate => _start.SelectedDate!.Value.ToString("yyyy-MM-dd");
@@ -77,6 +75,8 @@ internal sealed class PeriodCreateDialog : Window
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
+        _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
+        _reserveHint.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
 
         _endCheck.Checked += (_, _) => _end.IsEnabled = true;
         _endCheck.Unchecked += (_, _) => _end.IsEnabled = false;
@@ -219,8 +219,10 @@ internal sealed class PeriodCreateDialog : Window
     /// <summary>保留行:金额(元) + 「≈」+ 占预算比例(%) 双输入联动。</summary>
     private UIElement ReserveRow()
     {
-        var eq = new TextBlock { Text = "≈", VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray, Margin = new Thickness(6, 0, 6, 0) };
-        var pctMark = new TextBlock { Text = "%", VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray, Margin = new Thickness(3, 0, 0, 0) };
+        var eq = new TextBlock { Text = "≈", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 6, 0) };
+        eq.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
+        var pctMark = new TextBlock { Text = "%", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
+        pctMark.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(_reserveAmount);
         row.Children.Add(eq);
@@ -295,23 +297,23 @@ internal sealed class PeriodCreateDialog : Window
         if (!ParseMoney(_budgetBox.Text, out var b) || !ParseMoney(_reserveAmount.Text, out var r))
         {
             _reserveHint.Text = "保留 ≤ 资金池大小(预算);建议 ≤ 预算的一半。";
-            _reserveHint.Foreground = Brushes.Gray;
+            _reserveHint.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
             return;
         }
         if (b > 0 && r > b)
         {
             _reserveHint.Text = "保留已超过资金池大小(预算),需调低。";
-            _reserveHint.Foreground = Brushes.Firebrick;
+            _reserveHint.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
         }
         else if (b > 0 && r > b / 2m)
         {
             _reserveHint.Text = "保留占预算超过一半——建议 ≤ 一半,请确认这是预期。";
-            _reserveHint.Foreground = Brushes.DarkOrange;
+            _reserveHint.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Warn);
         }
         else
         {
             _reserveHint.Text = "保留 ≤ 资金池大小(预算);建议 ≤ 预算的一半。";
-            _reserveHint.Foreground = Brushes.Gray;
+            _reserveHint.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
         }
     }
 

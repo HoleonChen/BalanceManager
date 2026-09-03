@@ -3,11 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 
 namespace ZhangDan.App.Views;
 
-/// <summary>设置:账本信息 / 偏好(凌晨宽限)/ 数据自检 / CSV 导出 / 数据目录。</summary>
+/// <summary>设置:账本信息 / 外观(深浅/跟系统)/ 偏好(凌晨宽限)/ 数据自检 / CSV 导出 / 数据目录。</summary>
 internal sealed class SettingsPage : PageBase
 {
     private readonly TextBlock _ledgerInfo = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
@@ -27,6 +26,9 @@ internal sealed class SettingsPage : PageBase
         var exportBtn = new Button { Content = "导出全部流水 CSV…", MinWidth = 150, Height = 34, HorizontalAlignment = HorizontalAlignment.Left };
         exportBtn.Click += (_, _) => ExportCsv();
 
+        var logDirBtn = new Button { Content = "打开日志目录…", MinWidth = 130, Height = 32, HorizontalAlignment = HorizontalAlignment.Left };
+        logDirBtn.Click += (_, _) => OpenLogDir();
+
         var panel = new StackPanel { Margin = new Thickness(24, 16, 24, 16), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Title("设置"));
 
@@ -35,14 +37,25 @@ internal sealed class SettingsPage : PageBase
 
         panel.Children.Add(Section("偏好"));
         panel.Children.Add(_grace);
-        panel.Children.Add(new TextBlock
+        panel.Children.Add(Hint("深夜记前一晚的账时,不必手动把日期改回昨天。此偏好存于 %APPDATA%\\账单管理\\app.json。", new Thickness(0, 2, 0, 4)));
+
+        panel.Children.Add(Section("外观"));
+        var mode = App.Settings.ThemeMode ?? "system";
+        var themeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+        foreach (var (tag, label) in new[] { ("system", "跟随系统"), ("light", "浅色"), ("dark", "深色") })
         {
-            Text = "深夜记前一晚的账时,不必手动把日期改回昨天。此偏好存于 %APPDATA%\\账单管理\\app.json。",
-            Foreground = Brushes.Gray,
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 4)
-        });
+            var rb = new RadioButton
+            {
+                Content = label,
+                Margin = new Thickness(0, 0, 18, 0),
+                Tag = tag,
+                IsChecked = mode == tag
+            };
+            rb.Checked += (_, _) => SaveAppearance(rb);
+            themeRow.Children.Add(rb);
+        }
+        panel.Children.Add(themeRow);
+        panel.Children.Add(Hint("选「跟随系统」时,随 Windows 深浅色实时切换。", new Thickness(0, 2, 0, 4)));
 
         panel.Children.Add(Section("数据自检"));
         panel.Children.Add(selfBtn);
@@ -50,31 +63,14 @@ internal sealed class SettingsPage : PageBase
 
         panel.Children.Add(Section("导出"));
         panel.Children.Add(exportBtn);
-        panel.Children.Add(new TextBlock
-        {
-            Text = "单文件导出全量流水(含已作废/退款/转账),UTF-8 BOM 可直接用 Excel 打开。",
-            Foreground = Brushes.Gray,
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 4)
-        });
+        panel.Children.Add(Hint("单文件导出全量流水(含已作废/退款/转账),UTF-8 BOM 可直接用 Excel 打开。", new Thickness(0, 2, 0, 4)));
 
         panel.Children.Add(Section("数据目录"));
-        panel.Children.Add(new TextBlock
-        {
-            Text =
-                $"账本默认目录:{AppPaths.UserDataDir}\n" +
-                $"报表目录:{AppPaths.ReportDir}\n" +
-                $"设置文件:{AppPaths.SettingsFile}\n" +
-                $"日志目录:{AppPaths.LogDir}",
-            Foreground = Brushes.Gray,
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 4)
-        });
-
-        var logDirBtn = new Button { Content = "打开日志目录…", MinWidth = 130, Height = 32, HorizontalAlignment = HorizontalAlignment.Left };
-        logDirBtn.Click += (_, _) => OpenLogDir();
+        panel.Children.Add(Hint(
+            $"账本默认目录:{AppPaths.UserDataDir}\n" +
+            $"报表目录:{AppPaths.ReportDir}\n" +
+            $"设置文件:{AppPaths.SettingsFile}\n" +
+            $"日志目录:{AppPaths.LogDir}", new Thickness(0, 0, 0, 4)));
         panel.Children.Add(logDirBtn);
 
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -88,14 +84,31 @@ internal sealed class SettingsPage : PageBase
         Margin = new Thickness(0, 0, 0, 14)
     };
 
-    private static TextBlock Section(string text) => new()
+    private static TextBlock Section(string text)
     {
-        Text = text,
-        FontSize = 15,
-        FontWeight = FontWeights.SemiBold,
-        Foreground = Brushes.DimGray,
-        Margin = new Thickness(0, 10, 0, 4)
-    };
+        var t = new TextBlock
+        {
+            Text = text,
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 10, 0, 4)
+        };
+        t.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSection);
+        return t;
+    }
+
+    private static TextBlock Hint(string text, Thickness margin)
+    {
+        var t = new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = margin
+        };
+        t.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
+        return t;
+    }
 
     public override void OnShown()
     {
@@ -106,6 +119,15 @@ internal sealed class SettingsPage : PageBase
         }
         var size = new FileInfo(App.Ledger.Path).Length;
         _ledgerInfo.Text = $"账本名:{App.Ledger.Name}\n账本文件:{App.Ledger.Path}  ({size / 1024.0:0.0} KB)";
+    }
+
+    private void SaveAppearance(RadioButton rb)
+    {
+        if (rb.Tag is not string tag || rb.IsChecked != true)
+            return;
+        App.Settings.ThemeMode = tag;
+        App.Settings.Save();
+        ThemeService.Apply(ThemeService.ParseMode(tag));
     }
 
     private void SaveGrace(bool enabled)
@@ -134,7 +156,7 @@ internal sealed class SettingsPage : PageBase
     {
         btn.IsEnabled = false;
         _selfResult.Text = "自检运行中…";
-        _selfResult.Foreground = Brushes.Gray;
+        _selfResult.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
         try
         {
             var (ok, steps, err) = SelfTest.Run();
@@ -144,12 +166,12 @@ internal sealed class SettingsPage : PageBase
                 foreach (var step in steps)
                     sb.Append("· ").Append(step).Append('\n');
                 _selfResult.Text = sb.ToString();
-                _selfResult.Foreground = Brushes.SeaGreen;
+                _selfResult.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Success);
             }
             else
             {
                 _selfResult.Text = $"数据自检失败:\n{err}\n\n已执行步骤:\n{string.Join("\n", steps)}";
-                _selfResult.Foreground = Brushes.Firebrick;
+                _selfResult.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
             }
         }
         finally

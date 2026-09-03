@@ -24,7 +24,7 @@ internal sealed class RecordDialog : Window
     private readonly ComboBox _channelBox = new() { Width = 300, IsEditable = true };
     private readonly TextBox _noteBox = new() { Width = 300 };
     private readonly CheckBox _poolCheck = new() { Content = "计入资金池", IsChecked = true, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _error = new() { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap };
 
     private readonly bool _editing;
     private bool _income;
@@ -60,6 +60,7 @@ internal sealed class RecordDialog : Window
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
+        _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
 
         _channelBox.Items.Add("实体");
         _channelBox.Items.Add("网购");
@@ -206,7 +207,7 @@ internal sealed class RecordDialog : Window
     /// <summary>校验当前字段;通过则写入 AmountCents。失败在 _error 提示并返回 false。</summary>
     private bool Validate()
     {
-        _error.Foreground = System.Windows.Media.Brushes.Firebrick;
+        _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
         if (_datePicker.SelectedDate is null)
         {
             _error.Text = "请选择日期。";
@@ -261,13 +262,13 @@ internal sealed class RecordDialog : Window
             _nameBox.Clear();
             _channelBox.Text = "";
             _noteBox.Clear();
-            _error.Foreground = System.Windows.Media.Brushes.SeaGreen;
+            _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Success);
             _error.Text = $"已保存 {SavedCount} 笔 —— 日期/账户/分类沿用,可直接录下一笔;可随时改。";
         }
         catch (Exception ex)
         {
             Log.Error(ex, "记一笔·保存失败");
-            _error.Foreground = System.Windows.Media.Brushes.Firebrick;
+            _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
             _error.Text = $"保存失败:{ex.Message}";
         }
     }

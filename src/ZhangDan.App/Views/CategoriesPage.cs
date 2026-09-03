@@ -285,7 +285,7 @@ internal sealed class CategoryCreateDialog : Window
     private readonly TextBox _color = new() { Width = 110 };
     private readonly Border _vividPreview = NewPreview();
     private readonly Border _lightPreview = NewPreview();
-    private readonly TextBlock _error = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap };
 
     public string CategoryName => _name.Text.Trim();
     public string Keyword => _keyword.Text.Trim();
@@ -298,6 +298,7 @@ internal sealed class CategoryCreateDialog : Window
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
+        _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
 
         _name.Text = name ?? "";
         _keyword.Text = keyword ?? "";
@@ -330,7 +331,9 @@ internal sealed class CategoryCreateDialog : Window
         pair.Children.Add(_vividPreview);
         pair.Children.Add(new TextBlock { Text = " + ", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) });
         pair.Children.Add(_lightPreview);
-        pair.Children.Add(new TextBlock { Text = "(鲜艳+淡)", Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) });
+        var previewCaption = new TextBlock { Text = "(鲜艳+淡)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+        previewCaption.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
+        pair.Children.Add(previewCaption);
         DockPanel.SetDock(pair, Dock.Right);
         DockPanel.SetDock(_color, Dock.Left);
         editRow.Children.Add(_color);
@@ -354,15 +357,19 @@ internal sealed class CategoryCreateDialog : Window
         Content = panel;
     }
 
-    private static Border NewPreview() => new()
+    private static Border NewPreview()
     {
-        Width = 56,
-        Height = 22,
-        BorderBrush = Brushes.Gray,
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(3),
-        VerticalAlignment = VerticalAlignment.Center
-    };
+        var preview = new Border
+        {
+            Width = 56,
+            Height = 22,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        preview.SetResourceReference(Border.BorderBrushProperty, UiKeys.TextSecondary);
+        return preview;
+    }
 
     private void RefreshPreview()
     {
@@ -457,9 +464,9 @@ internal sealed class CategoryMergeDialog : Window
         {
             Text = $"「{source.Name}」的 {used} 笔流水将全部改挂到目标分类;\n关键词会并入目标,颜色以目标为准(源的颜色丢弃),随后删除「{source.Name}」。",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = Brushes.Gray,
             Margin = new Thickness(0, 0, 0, 6)
         };
+        intro.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
 
         var ok = new Button { Content = "合并", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Accept();

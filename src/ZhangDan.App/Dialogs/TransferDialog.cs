@@ -19,9 +19,9 @@ internal sealed class TransferDialog : Window
     private readonly TextBox _deltaBox = new() { Text = "0", Width = 300 };
     private readonly ComboBox _kindBox = new() { Width = 300 };
     private readonly TextBox _noteBox = new() { Width = 300 };
-    private readonly TextBlock _actualLabel = new() { Foreground = System.Windows.Media.Brushes.Gray, Margin = new Thickness(0, 2, 0, 0) };
+    private readonly TextBlock _actualLabel = new() { Margin = new Thickness(0, 2, 0, 0) };
     private readonly CheckBox _poolCheck = new() { Content = "计入资金池(转出池账户时勾选)", IsChecked = false };
-    private readonly TextBlock _error = new() { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap };
 
     public string DateStr => _datePicker.SelectedDate?.ToString("yyyy-MM-dd") ?? "";
     public long FromAccountId => ((AccountRow)_fromBox.SelectedItem).Id;
@@ -40,6 +40,8 @@ internal sealed class TransferDialog : Window
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
+        _actualLabel.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSecondary);
+        _error.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Error);
 
         _fromBox.ItemsSource = _accounts;
         _toBox.ItemsSource = _accounts;

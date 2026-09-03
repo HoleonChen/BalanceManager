@@ -1,0 +1,19 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 浅色语义笔刷:复刻重构前硬编码外观。键集必须与 Dark.xaml 完全一致(运行时会做一致性自检)。 -->
+    <SolidColorBrush x:Key="WindowBg" Color="#F4F6F8" />
+    <SolidColorBrush x:Key="PanelBg" Color="#FAFBFD" />
+    <SolidColorBrush x:Key="TextPrimary" Color="#1F1F1F" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#808080" />
+    <SolidColorBrush x:Key="TextMuted" Color="#8A8A8A" />
+    <SolidColorBrush x:Key="TextSection" Color="#696969" />
+    <SolidColorBrush x:Key="Divider" Color="#D8DEE3" />
+    <SolidColorBrush x:Key="BorderLine" Color="#DCDCDC" />
+    <SolidColorBrush x:Key="ControlTrack" Color="#E3E7EC" />
+    <SolidColorBrush x:Key="Expense" Color="#B22222" />
+    <SolidColorBrush x:Key="Income" Color="#2E8B57" />
+    <SolidColorBrush x:Key="Error" Color="#B22222" />
+    <SolidColorBrush x:Key="Success" Color="#2E8B57" />
+    <SolidColorBrush x:Key="Warn" Color="#FF8C00" />
+    <SolidColorBrush x:Key="CalendarBlankCell" Color="#F3F4F6" />
+</ResourceDictionary>

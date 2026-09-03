@@ -22,6 +22,12 @@ internal sealed class AppSettings
     /// <summary>日志级别(debug/info/warn/error;缺省/未知 → info)。</summary>
     public string? LogLevel { get; set; }
 
+    /// <summary>外观:system(跟随系统,缺省)/ light / dark。</summary>
+    public string? ThemeMode { get; set; }
+
+    /// <summary>强调色(#RRGGBB;缺省 → 默认钢蓝 #4682B4)。</summary>
+    public string? Accent { get; set; }
+
     public static AppSettings Load()
     {
         var settings = new AppSettings();
