@@ -6,12 +6,15 @@ using System.Windows.Media;
 
 namespace ZhangDan.App.Views;
 
-/// <summary>账户:列表 + 净资产合计;可新建、停用/启用、校准入口(校准/详情后续页做)。</summary>
+/// <summary>账户:列表 + 净资产合计 + 选中账户详情(余额构成/本周期变动/校准历史);可新建/停用/校准。</summary>
 internal sealed class AccountsPage : PageBase
 {
     private LedgerSession S => App.Ledger!;
     private readonly TextBlock _summary = new() { FontWeight = FontWeights.SemiBold, FontSize = 15, Margin = new Thickness(4, 0, 0, 0) };
     private readonly ListView _list = new();
+    private readonly Border _detail = new();
+    private readonly StackPanel _detailBody = new();
+    private long? _selectedId;
 
     private sealed class Row
     {
@@ -55,9 +58,12 @@ internal sealed class AccountsPage : PageBase
 
         var menu = new ContextMenu();
         var mEdit = new MenuItem { Header = "编辑账户…" }; mEdit.Click += (_, _) => EditSelected();
+        var mCalib = new MenuItem { Header = "校准余额…" };
+        mCalib.Click += (_, _) => { var rr = Selected(); if (rr is not null) Calibrate(rr.A.Id); };
         var mDisable = new MenuItem { Header = "停用" }; mDisable.Click += (_, _) => Toggle(false);
         var mEnable = new MenuItem { Header = "启用" }; mEnable.Click += (_, _) => Toggle(true);
         menu.Items.Add(mEdit);
+        menu.Items.Add(mCalib);
         menu.Items.Add(mDisable);
         menu.Items.Add(mEnable);
         _list.ContextMenu = menu;
@@ -74,13 +80,30 @@ internal sealed class AccountsPage : PageBase
         _list.SelectionMode = SelectionMode.Single;
         _list.MouseDoubleClick += (_, _) => Toggle(!(Selected()?.A.Enabled ?? true));
 
+        _list.SelectionChanged += (_, _) => ShowDetail(Selected());
+
+        _detail.BorderBrush = Brushes.LightGray;
+        _detail.BorderThickness = new Thickness(0, 1, 0, 0);
+        _detail.Padding = new Thickness(20, 10, 20, 14);
+        _detail.Child = new ScrollViewer
+        {
+            MaxHeight = 340,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = _detailBody
+        };
+        _detail.Visibility = Visibility.Collapsed;
+
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(top, 0);
         Grid.SetRow(_list, 1);
+        Grid.SetRow(_detail, 2);
         grid.Children.Add(top);
         grid.Children.Add(_list);
+        grid.Children.Add(_detail);
         Content = grid;
     }
 
@@ -103,10 +126,22 @@ internal sealed class AccountsPage : PageBase
 
     private void Reload()
     {
+        var keepId = _selectedId ?? Selected()?.A.Id;
         var rows = new List<Row>();
         foreach (var a in Accounts.ListAll(S))
             rows.Add(new Row { A = a });
         _list.ItemsSource = rows;
+        if (keepId is long id)
+        {
+            foreach (var r in rows)
+            {
+                if (r.A.Id == id)
+                {
+                    _list.SelectedItem = r;
+                    break;
+                }
+            }
+        }
         _summary.Text = $"净资产合计(启用账户):{Money.Yuan(Accounts.NetAssets(S))}";
     }
 
@@ -115,16 +150,236 @@ internal sealed class AccountsPage : PageBase
         var row = Selected();
         if (row is null)
             return;
+        ToggleEnable(row.A.Id, enable);
+    }
+
+    private void ToggleEnable(long id, bool enable)
+    {
         if (enable)
-            Accounts.Enable(S, row.A.Id);
+        {
+            Accounts.Enable(S, id);
+        }
         else
         {
-            if (MessageBox.Show($"停用账户「{row.A.Name}」?\n\n它不再出现在记账/转账下拉;已记流水保留。",
+            if (MessageBox.Show($"停用账户「{AccountNameOf(id)}」?\n\n它不再出现在记账/转账下拉;已记流水保留。",
                     "停用账户", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
                 return;
-            Accounts.Disable(S, row.A.Id);
+            Accounts.Disable(S, id);
         }
         Reload();
+    }
+
+    private string AccountNameOf(long id)
+    {
+        using var cmd = S.Connection.CreateCommand();
+        cmd.CommandText = "SELECT name FROM accounts WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        return cmd.ExecuteScalar() as string ?? "(账户不存在)";
+    }
+
+    private Row? FindRow(long id)
+    {
+        if (_list.ItemsSource is List<Row> rows)
+        {
+            foreach (var r in rows)
+            {
+                if (r.A.Id == id)
+                    return r;
+            }
+        }
+        return null;
+    }
+
+    private void EditAccount(long id)
+    {
+        var r = FindRow(id);
+        if (r is null)
+            return;
+        var dlg = new AccountCreateDialog(existing: r.A) { Owner = Window.GetWindow(this) };
+        if (dlg.ShowDialog() != true)
+            return;
+        try
+        {
+            Accounts.UpdateInfo(S, r.A.Id, dlg.AccountName, dlg.TypeKey, dlg.Platform);
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"保存失败:\n{ex.Message}", "账户", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void Calibrate(long id)
+    {
+        var r = FindRow(id);
+        if (r is null)
+            return;
+        var dlg = new CalibrateDialog(S, r.A) { Owner = Window.GetWindow(this) };
+        if (dlg.ShowDialog() != true)
+            return;
+        try
+        {
+            var diff = AccountCalibration.Apply(S, id, dlg.ActualCents, dlg.Method, dlg.Note);
+            if (dlg.Method == CalibMethod.RealDetails && diff != 0)
+            {
+                MessageBox.Show(
+                    $"已记录本次校准(方式:补记真实明细)。\n账面与实际仍差 {Money.Yuan(Math.Abs(diff))}。\n请手动补记漏记的真实流水;账面会随补记自动对齐。",
+                    "校准余额", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"校准失败:\n{ex.Message}", "校准余额", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>选中账户 → 下方面板:余额构成 + 本周期变动 + 校准历史 + 操作按钮。</summary>
+    private void ShowDetail(Row? row)
+    {
+        if (row is null)
+        {
+            _selectedId = null;
+            _detail.Visibility = Visibility.Collapsed;
+            _detailBody.Children.Clear();
+            return;
+        }
+        _selectedId = row.A.Id;
+        var body = _detailBody;
+        body.Children.Clear();
+        var s = S;
+        var id = row.A.Id;
+
+        var name = new TextBlock { Text = row.A.Name, FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = Brushes.SteelBlue };
+        var meta = new TextBlock
+        {
+            Text = $"{TypeLabel(row.A.Type)} · 平台 {row.A.Platform}",
+            Foreground = Brushes.Gray,
+            Margin = new Thickness(10, 2, 0, 0),
+            VerticalAlignment = VerticalAlignment.Bottom
+        };
+        var status = new TextBlock
+        {
+            Text = row.A.Enabled ? "启用中" : "已停用(不计净资产)",
+            Foreground = row.A.Enabled ? Brushes.SeaGreen : Brushes.Gray,
+            Margin = new Thickness(12, 2, 0, 0),
+            VerticalAlignment = VerticalAlignment.Bottom
+        };
+        var head = new StackPanel { Orientation = Orientation.Horizontal };
+        head.Children.Add(name);
+        head.Children.Add(meta);
+        head.Children.Add(status);
+        body.Children.Add(head);
+
+        var book = AccountCalibration.BookCents(s, id);
+        var (baseCents, baseDate) = Accounts.BaseOf(s, id);
+        body.Children.Add(new TextBlock
+        {
+            Text = $"当前账面(派生):{Money.Yuan(book)}",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 2)
+        });
+        body.Children.Add(new TextBlock
+        {
+            Text = $"基准余额:{Money.Yuan(baseCents)} · 基准日:{(baseDate is null ? "(自建账起算)" : baseDate)}",
+            Foreground = Brushes.Gray
+        });
+
+        body.Children.Add(Rule());
+
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var p = Periods.GetCoveringActive(s, today);
+        body.Children.Add(Section(p is null ? "本周期变动" : $"本周期变动 · {p.Name}({Short(p.StartDate)}~{(p.EndDate is null ? "长期" : Short(p.EndDate))})"));
+        if (p is not null)
+        {
+            var mv = Accounts.MovementBetween(s, id, p.StartDate, p.EndDate ?? "9999-12-31");
+            body.Children.Add(Line($"收入 {Money.Yuan(mv.InCents)} · 支出 {Money.Yuan(mv.OutCents)} · 转入 {Money.Yuan(mv.TransferInCents)} · 转出 {Money.Yuan(mv.TransferOutCents)}"));
+            body.Children.Add(Line($"净变动 {Money.Yuan(mv.NetCents)}", gray: true));
+        }
+        else
+        {
+            body.Children.Add(Line("当前无进行中的周期。", gray: true));
+        }
+
+        var all = Accounts.MovementBetween(s, id, baseDate ?? "0000-01-01", "9999-12-31");
+        body.Children.Add(Section("自基准日累计构成(账面 = 基准 + 净变动)"));
+        body.Children.Add(Line($"收入 {Money.Yuan(all.InCents)} · 支出 {Money.Yuan(all.OutCents)} · 转入 {Money.Yuan(all.TransferInCents)} · 转出 {Money.Yuan(all.TransferOutCents)}"));
+        body.Children.Add(Line($"累计净变动 {Money.Yuan(all.NetCents)}", gray: true));
+
+        var bEdit = new Button { Content = "编辑账户…", MinWidth = 112, Height = 30, Margin = new Thickness(0, 10, 10, 0) };
+        bEdit.Click += (_, _) => EditAccount(id);
+        var bCalib = new Button { Content = "校准余额…", MinWidth = 112, Height = 30, Margin = new Thickness(0, 10, 10, 0) };
+        bCalib.Click += (_, _) => Calibrate(id);
+        var bTog = new Button { Content = row.A.Enabled ? "停用" : "启用", MinWidth = 92, Height = 30, Margin = new Thickness(0, 10, 0, 0) };
+        bTog.Click += (_, _) => ToggleEnable(id, !row.A.Enabled);
+        var btns = new StackPanel { Orientation = Orientation.Horizontal };
+        btns.Children.Add(bEdit);
+        btns.Children.Add(bCalib);
+        btns.Children.Add(bTog);
+        body.Children.Add(btns);
+
+        body.Children.Add(Rule());
+
+        var hist = AccountCalibration.History(s, id);
+        body.Children.Add(Section($"校准历史({hist.Count} 次)"));
+        body.Children.Add(hist.Count == 0 ? Line("尚无校准记录。账面与真实不符时,点「校准余额」对齐。", gray: true) : BuildHistory(hist));
+
+        _detail.Visibility = Visibility.Visible;
+    }
+
+    private static UIElement Rule() => new Border { Height = 1, Background = Brushes.Gainsboro, Margin = new Thickness(0, 6, 0, 6) };
+
+    private static TextBlock Section(string text) => new()
+    {
+        Text = text,
+        FontWeight = FontWeights.SemiBold,
+        Foreground = Brushes.DimGray,
+        Margin = new Thickness(0, 2, 0, 2)
+    };
+
+    private static TextBlock Line(string text, bool gray = false) => new()
+    {
+        Text = text,
+        Foreground = gray ? Brushes.Gray : System.Windows.Media.Brushes.Black,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 0, 0, 2)
+    };
+
+    private static string Short(string iso)
+    {
+        var p = iso.Split('-');
+        return $"{p[0]}/{int.Parse(p[1])}/{int.Parse(p[2])}";
+    }
+
+    /// <summary>校准历史表(只读)。</summary>
+    private static UIElement BuildHistory(IReadOnlyList<CalibrationEntry> entries)
+    {
+        var lv = new ListView { MaxHeight = 150 };
+        var gv = new GridView();
+        gv.Columns.Add(new GridViewColumn { Header = "时间", Width = 126, DisplayMemberBinding = Bind("When") });
+        gv.Columns.Add(new GridViewColumn { Header = "账面", Width = 78, DisplayMemberBinding = Bind("Book") });
+        gv.Columns.Add(new GridViewColumn { Header = "实际", Width = 78, DisplayMemberBinding = Bind("Actual") });
+        gv.Columns.Add(new GridViewColumn { Header = "差额", Width = 88, DisplayMemberBinding = Bind("Diff") });
+        gv.Columns.Add(new GridViewColumn { Header = "方式", Width = 120, DisplayMemberBinding = Bind("Method") });
+        gv.Columns.Add(new GridViewColumn { Header = "备注", Width = 200, DisplayMemberBinding = Bind("Note") });
+        lv.View = gv;
+        var rows = new List<HistoryRow>();
+        foreach (var e in entries)
+            rows.Add(new HistoryRow(e));
+        lv.ItemsSource = rows;
+        return lv;
+    }
+
+    private sealed class HistoryRow
+    {
+        public HistoryRow(CalibrationEntry e) => E = e;
+        private readonly CalibrationEntry E;
+        public string When => E.RecordedAt;
+        public string Book => Money.Yuan(E.BookCents);
+        public string Actual => Money.Yuan(E.ActualCents);
+        public string Diff => (E.DiffCents > 0 ? "+" : "") + Money.Yuan(E.DiffCents);
+        public string Method => CalibMethod.Label(E.Method);
+        public string Note => E.Note ?? "";
     }
 
     private void CreateAccount()
@@ -275,4 +530,150 @@ internal sealed class AccountCreateDialog : Window
         }
         DialogResult = true;
     }
+}
+
+/// <summary>校准余额对话框:当前账面 / 填实际余额 / 实时差额,三种处理方式三选一(设计 §3.2)。</summary>
+internal sealed class CalibrateDialog : Window
+{
+    private static readonly (string Key, string Title, string Desc)[] Methods =
+    {
+        (CalibMethod.Adjustment, "记调整流水(推荐)",
+            "差额自动生成一笔「差额调整」流水(实际&gt;账面记收入 / 实际&lt;账面记支出);账面随即对齐实际,留档可查。"),
+        (CalibMethod.RealDetails, "补记真实明细",
+            "差额来自漏记的真实流水:补记后账面自对齐,本次仅记录审计日志。"),
+        (CalibMethod.BaseOnly, "仅更新基准",
+            "不写流水,直接把基准余额平移对齐(适合历史账对不上、不想留调整痕迹时)。"),
+    };
+
+    private readonly List<(RadioButton Rb, string Key)> _radios = new();
+    private readonly TextBlock _diff = new() { Margin = new Thickness(2, 2, 0, 0), TextWrapping = TextWrapping.Wrap };
+    private readonly TextBox _note = new() { Width = 300, Height = 64, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBox _actual = new() { Width = 180 };
+    private readonly long _bookCents;
+
+    public long ActualCents { get; private set; }
+    public string Method
+    {
+        get
+        {
+            foreach (var (rb, key) in _radios)
+            {
+                if (rb.IsChecked == true)
+                    return key;
+            }
+            return CalibMethod.Adjustment;
+        }
+    }
+    public string Note => _note.Text.Trim();
+
+    public CalibrateDialog(LedgerSession s, AccountRow account)
+    {
+        _bookCents = AccountCalibration.BookCents(s, account.Id);
+        Title = $"校准余额 · {account.Name}";
+        Width = 560;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+
+        var body = new StackPanel();
+        body.Children.Add(new TextBlock
+        {
+            Text = $"当前账面(派生):{Money.Yuan(_bookCents)}",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+
+        _actual.Text = (_bookCents / 100m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        _actual.TextChanged += (_, _) => RefreshDiff();
+
+        body.Children.Add(Field("实际余额(元)", _actual));
+        RefreshDiff();
+        body.Children.Add(_diff);
+
+        body.Children.Add(Rule());
+
+        body.Children.Add(new TextBlock { Text = "如何处理差额", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        bool first = true;
+        foreach (var (key, title, desc) in Methods)
+        {
+            var rb = new RadioButton
+            {
+                Content = title,
+                GroupName = "calibMethod",
+                IsChecked = first,
+                FontWeight = first ? FontWeights.SemiBold : FontWeights.Normal
+            };
+            first = false;
+            _radios.Add((rb, key));
+            body.Children.Add(rb);
+            body.Children.Add(new TextBlock
+            {
+                Text = desc,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = Brushes.Gray,
+                FontSize = 12,
+                Margin = new Thickness(22, 0, 0, 6)
+            });
+        }
+
+        body.Children.Add(new TextBlock { Text = "备注(可空,写入校准审计)", Margin = new Thickness(0, 4, 0, 4) });
+        body.Children.Add(_note);
+
+        var ok = new Button { Content = "校准", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        ok.Click += (_, _) => Accept();
+        var cancel = new Button { Content = "取消", Width = 96, Height = 34, IsCancel = true };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+        row.Children.Add(ok);
+        row.Children.Add(cancel);
+
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(body);
+        panel.Children.Add(row);
+        Content = panel;
+    }
+
+    private void RefreshDiff()
+    {
+        if (!TryParse(_actual.Text, out var yuan))
+        {
+            _diff.Text = "实际余额请填数字(元)。";
+            _diff.Foreground = Brushes.Firebrick;
+            return;
+        }
+        var diff = Money.ToCents(yuan) - _bookCents;
+        _diff.Text = diff == 0
+            ? "差额:0 —— 账面与实际一致,无需调整。"
+            : $"差额:{Money.Yuan(diff)}(实际 − 账面)。{(diff > 0 ? "账面少记了钱" : "账面多记了钱")}";
+        _diff.Foreground = diff == 0 ? Brushes.SeaGreen : Brushes.DarkOrange;
+    }
+
+    private static bool TryParse(string text, out decimal v)
+        => decimal.TryParse(text.Trim(), System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out v)
+        || decimal.TryParse(text.Trim(), System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.CurrentCulture, out v);
+
+    private void Accept()
+    {
+        if (!TryParse(_actual.Text, out var yuan))
+        {
+            _diff.Text = "实际余额请填数字(元)。";
+            _diff.Foreground = Brushes.Firebrick;
+            return;
+        }
+        ActualCents = Money.ToCents(yuan);
+        DialogResult = true;
+    }
+
+    private static UIElement Field(string label, UIElement input)
+    {
+        var text = new TextBlock { Text = label, Width = 130, VerticalAlignment = VerticalAlignment.Center };
+        var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
+        DockPanel.SetDock(text, Dock.Left);
+        d.Children.Add(text);
+        d.Children.Add(input);
+        return d;
+    }
+
+    private static UIElement Rule() => new Border { Height = 1, Background = Brushes.Gainsboro, Margin = new Thickness(0, 10, 0, 8) };
 }
