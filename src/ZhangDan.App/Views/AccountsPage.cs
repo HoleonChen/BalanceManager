@@ -521,11 +521,10 @@ internal sealed class AccountsPage : PageBase
         "fixed_deposit" => "定存(整存整取)",
         "fund" => "基金",
         "prepaid" => "储值卡(水卡等)",
-        "credit_card" => "信用卡(负债)",
-        "hua_bei" => "花呗(负债)",
-        "bai_tiao" => "白条(负债)",
-        "jin_tiao" => "京东金条(负债)",
-        "credit" => "其他信用额度/负债",
+        "credit" => "信用额度/负债(花呗/白条/信用卡…)",
+        "credit_card" => "信用卡(负债·旧)",
+        "hua_bei" => "花呗(负债·旧)",
+        "bai_tiao" => "白条(负债·旧)",
         _ => key
     };
 }
@@ -538,11 +537,9 @@ internal sealed class AccountCreateDialog : Window
         ("钱包(零钱/余额)", "wallet"), ("货币基金(零钱通/余额宝)", "money_fund"),
         ("银行卡", "bank"), ("现金", "cash"), ("定存(整存整取)", "fixed_deposit"),
         ("基金", "fund"), ("储值卡(水卡等)", "prepaid"),
-        ("信用卡(负债)", "credit_card"), ("花呗(负债)", "hua_bei"),
-        ("白条(负债)", "bai_tiao"), ("京东金条(负债)", "jin_tiao"),
-        ("其他信用额度/负债", "credit")
+        ("信用额度/负债(花呗/白条/信用卡…)", "credit")
     };
-    private static readonly string[] Platforms = { "微信", "支付宝", "银行", "投资", "现金", "储值卡" };
+    private static readonly string[] Platforms = { "微信", "支付宝", "银行", "投资", "现金", "储值卡", "信用卡", "花呗", "白条" };
 
     private readonly TextBox _name = new() { Width = 300 };
     private readonly ComboBox _type = new() { Width = 300 };

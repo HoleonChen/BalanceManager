@@ -23,16 +23,17 @@ internal static class AccountKinds
     public static readonly string[] Asset =
         { Wallet, MoneyFund, Bank, Cash, FixedDeposit, Fund, Prepaid };
 
-    // —— 负债(信用额度 / 待还,允许负余额)——
-    public const string CreditCard = "credit_card";   // 信用卡
-    public const string HuaBei = "hua_bei";           // 花呗(信用额度消费)
-    public const string BaiTiao = "bai_tiao";         // 白条(信用额度消费)
-    public const string JinTiao = "jin_tiao";         // 京东金条(现金借贷)
-    public const string Credit = "credit";            // 其他信用额度/负债
+    // —— 负债(信用额度/待还,允许负余额)——
+    // 用户拍板:花呗/白条/信用卡等统一归一大类「信用额度/负债」(credit),平台名在 platform 里填;
+    // 不再按平台细分类型。下方旧 token 仅作历史兼容(老数据里的 credit_card/hua_bei/bai_tiao 仍判负债),新账户用 credit。
+    public const string CreditCard = "credit_card";   // 旧:信用卡(兼容)
+    public const string HuaBei = "hua_bei";           // 旧:花呗(兼容)
+    public const string BaiTiao = "bai_tiao";         // 旧:白条(兼容)
+    public const string Credit = "credit";            // 信用额度/负债(花呗/白条/信用卡…)
 
-    /// <summary>负债型 token:允许负余额;净资产按当前(负)账面计入。</summary>
+    /// <summary>负债型 token:允许负余额;净资产按当前(负)账面计入。新值只用 <see cref="Credit"/>。</summary>
     public static readonly string[] Liability =
-        { CreditCard, HuaBei, BaiTiao, JinTiao, Credit };
+        { Credit, CreditCard, HuaBei, BaiTiao };
 
     /// <summary>是否负债型账户类型(可透支 / 余额为负)。</summary>
     public static bool IsLiability(string? type) =>

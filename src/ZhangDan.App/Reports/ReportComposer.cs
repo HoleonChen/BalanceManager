@@ -249,8 +249,9 @@ internal static class ReportComposer
     {
         "wallet" => "钱包", "money_fund" => "货基", "bank" => "银行卡", "cash" => "现金",
         "fixed_deposit" => "定存", "fund" => "基金", "prepaid" => "储值卡",
-        "credit_card" => "信用卡(负债)", "hua_bei" => "花呗(负债)", "bai_tiao" => "白条(负债)",
-        "jin_tiao" => "金条(负债)", "credit" => "其他信用/负债", _ => key
+        "credit" => "信用额度/负债",
+        "credit_card" => "信用卡(负债·旧)", "hua_bei" => "花呗(负债·旧)", "bai_tiao" => "白条(负债·旧)",
+        _ => key
     };
 
     private static ReportSheet TopSheet(LedgerSession s, ZhangDan.Reports.Scope scope, bool income, string title)
