@@ -66,6 +66,11 @@ dotnet publish src/ZhangDan.App -c Release -r win-x64 --self-contained true -o p
 - SQLite + **SQLCipher**(SQLitePCLRaw)
 - 报表:[QuestPDF](https://github.com/QuestPDF/QuestPDF) · [ClosedXML](https://github.com/ClosedXML/ClosedXML) · [ScottPlot](https://github.com/ScottPlot/ScottPlot)
 
+## 🤖 AI 协助声明
+
+本项目在开发过程中使用了 **AI 编码助手(Claude)** 辅助编写/重构代码与文档;
+所有代码与设计由作者 **HoleonChen** 负责审核、测试与发布。应用**全离线、无任何数据上报或训练采集**。
+
 ## 📄 许可与致谢
 
 - 本仓库代码以 **MIT** 许可发布(见 [`LICENSE`](LICENSE));个人使用、朋友间使用、二次分发均可。
