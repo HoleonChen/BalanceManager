@@ -20,6 +20,7 @@ internal sealed class CategoriesPage : PageBase
         public required CategoryRow C { get; init; }
         public string Name => C.Name;
         public string Keyword { get; init; } = "";
+        public string Used => $"{Categories.UsedCount(App.Ledger!, C.Id)} 笔";
         public Brush Vivid => ParseHex(C.Color) ?? Brushes.Transparent;
         public Brush Light => Vivid is SolidColorBrush b ? new SolidColorBrush(Lighten(b.Color)) : Brushes.Transparent;
 
@@ -56,6 +57,8 @@ internal sealed class CategoriesPage : PageBase
         create.Click += (_, _) => Create();
         var edit = new Button { Content = "编辑…", MinWidth = 76, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
         edit.Click += (_, _) => EditSelected();
+        var merge = new Button { Content = "合并到…", MinWidth = 92, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
+        merge.Click += (_, _) => MergeSelected();
         var del = new Button { Content = "删除所选", MinWidth = 92, Height = 34, Margin = new Thickness(10, 0, 0, 0) };
         del.Click += (_, _) => Delete();
 
@@ -64,14 +67,17 @@ internal sealed class CategoriesPage : PageBase
         top.Children.Add(_inRadio);
         top.Children.Add(create);
         top.Children.Add(edit);
+        top.Children.Add(merge);
         top.Children.Add(del);
 
         var menu = new ContextMenu();
         var mEdit = new MenuItem { Header = "编辑…" }; mEdit.Click += (_, _) => EditSelected();
+        var mMerge = new MenuItem { Header = "合并到…" }; mMerge.Click += (_, _) => MergeSelected();
         var mUp = new MenuItem { Header = "上移" }; mUp.Click += (_, _) => MoveSelected(true);
         var mDown = new MenuItem { Header = "下移" }; mDown.Click += (_, _) => MoveSelected(false);
         var mDel = new MenuItem { Header = "删除" }; mDel.Click += (_, _) => Delete();
         menu.Items.Add(mEdit);
+        menu.Items.Add(mMerge);
         menu.Items.Add(new Separator());
         menu.Items.Add(mUp);
         menu.Items.Add(mDown);
@@ -82,7 +88,8 @@ internal sealed class CategoriesPage : PageBase
         var gv = new GridView();
         gv.Columns.Add(new GridViewColumn { Header = "名称", Width = 180, DisplayMemberBinding = Bind("Name") });
         gv.Columns.Add(new GridViewColumn { Header = "颜色", Width = 96, CellTemplate = SwatchTemplate() });
-        gv.Columns.Add(new GridViewColumn { Header = "关键词(导入归类)", Width = 240, DisplayMemberBinding = Bind("Keyword") });
+        gv.Columns.Add(new GridViewColumn { Header = "使用", Width = 80, DisplayMemberBinding = Bind("Used") });
+        gv.Columns.Add(new GridViewColumn { Header = "关键词(导入归类)", Width = 200, DisplayMemberBinding = Bind("Keyword") });
         _list.View = gv;
         _list.Margin = new Thickness(20, 0, 20, 12);
         _list.SelectionMode = SelectionMode.Single;
@@ -188,6 +195,48 @@ internal sealed class CategoriesPage : PageBase
             return;
         Categories.Move(S, r.C.Id, up);
         Reload();
+    }
+
+    /// <summary>把所选分类并进另一分类(流水改挂、关键词并入、颜色保留目标、源删除)。</summary>
+    private void MergeSelected()
+    {
+        var r = Selected();
+        if (r is null)
+            return;
+        if (Categories.ChildCount(S, r.C.Id) > 0)
+        {
+            MessageBox.Show($"「{r.C.Name}」下还有子分类(如「差额调整」),不能作为源合并。",
+                "合并分类", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var sameGroup = Categories.ListManual(S, Income);
+        bool hasOther = false;
+        foreach (var c in sameGroup)
+        {
+            if (c.Id != r.C.Id)
+            {
+                hasOther = true;
+                break;
+            }
+        }
+        if (!hasOther)
+        {
+            MessageBox.Show($"{(Income ? "收入" : "支出")}分类组里没有可合并的其他分类。",
+                "合并分类", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var dlg = new CategoryMergeDialog(S, r.C, income: Income) { Owner = Window.GetWindow(this) };
+        if (dlg.ShowDialog() != true)
+            return;
+        try
+        {
+            Categories.Merge(S, r.C.Id, dlg.TargetId);
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"合并失败:\n{ex.Message}", "合并分类", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void Delete()
@@ -363,6 +412,81 @@ internal sealed class CategoryCreateDialog : Window
         if (c is not null && (c.Length != 7 || c[0] != '#'))
         {
             _error.Text = "颜色请填 #RRGGBB 格式,或留空(留空则以后自动配色)。";
+            return;
+        }
+        DialogResult = true;
+    }
+}
+
+/// <summary>合并目标选择小窗:把源分类并进选中的同组目标。</summary>
+internal sealed class CategoryMergeDialog : Window
+{
+    private sealed record TargetOption(long Id, string Name, long Used)
+    {
+        public string Label => $"{Name}({Used} 笔)";
+    }
+
+    private readonly ComboBox _target = new() { Width = 320 };
+
+    public long TargetId => ((TargetOption)_target.SelectedItem).Id;
+
+    public CategoryMergeDialog(LedgerSession s, CategoryRow source, bool income)
+    {
+        Title = $"把「{source.Name}」合并到…";
+        Width = 480;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+
+        foreach (var c in Categories.ListManual(s, income))
+        {
+            if (c.Id == source.Id)
+                continue;                 // 不能并回自身
+            _target.Items.Add(new TargetOption(c.Id, c.Name, Categories.UsedCount(s, c.Id)));
+        }
+        _target.DisplayMemberPath = "Label";
+        if (_target.Items.Count > 0)
+            _target.SelectedIndex = 0;
+
+        var used = Categories.UsedCount(s, source.Id);
+        var intro = new TextBlock
+        {
+            Text = $"「{source.Name}」的 {used} 笔流水将全部改挂到目标分类;\n关键词会并入目标,颜色以目标为准(源的颜色丢弃),随后删除「{source.Name}」。",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brushes.Gray,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+
+        var ok = new Button { Content = "合并", Width = 96, Height = 34, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        ok.Click += (_, _) => Accept();
+        var cancel = new Button { Content = "取消", Width = 96, Height = 34, IsCancel = true };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
+        row.Children.Add(ok);
+        row.Children.Add(cancel);
+
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(intro);
+        panel.Children.Add(Field("合并到", _target));
+        panel.Children.Add(row);
+        Content = panel;
+    }
+
+    private static UIElement Field(string label, UIElement input)
+    {
+        var text = new TextBlock { Text = label, Width = 70, VerticalAlignment = VerticalAlignment.Center };
+        var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
+        DockPanel.SetDock(text, Dock.Left);
+        d.Children.Add(text);
+        d.Children.Add(input);
+        return d;
+    }
+
+    private void Accept()
+    {
+        if (_target.SelectedItem is not TargetOption)
+        {
+            // 无候选目标时不应走到;防御即可
+            MessageBox.Show("该分类组下没有可合并的其他分类。", "合并分类", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         DialogResult = true;
