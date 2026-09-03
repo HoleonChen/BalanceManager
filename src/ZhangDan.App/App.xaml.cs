@@ -38,6 +38,7 @@ public partial class App : Application
 
         // 外观(浅/深/跟随系统 + 强调色)——统一走 ThemeService
         ThemeService.Apply(ThemeService.ParseMode(App.Settings.ThemeMode), App.Settings.Accent);
+        UiTheme.HookWindowSurfaces();   // 弹出对话框的窗底/默认文字也随主题
 
         var window = new MainWindow();
         window.Show();
