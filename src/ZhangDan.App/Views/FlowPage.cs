@@ -274,6 +274,13 @@ internal sealed class FlowPage : PageBase
         return $"{p[0]}/{int.Parse(p[1])}/{int.Parse(p[2])}";
     }
 
+    /// <summary>外部(账户详情)跳来:预置只看该账户的全部流水,切「全部」范围。</summary>
+    internal void PresetAccount(long accountId)
+    {
+        _scope = "all";
+        _acct = accountId;
+    }
+
     private void ResetFilters()
     {
         _scope = "all";

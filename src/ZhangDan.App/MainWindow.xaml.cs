@@ -25,6 +25,12 @@ public partial class MainWindow
             new SettingsPage()
         };
         ((DayLedgerPage)_pages[0]).GoTo = NavTo;
+        var flowPage = (FlowPage)_pages[1];
+        ((AccountsPage)_pages[3]).ViewAccountFlows = id =>
+        {
+            flowPage.PresetAccount(id);
+            NavTo(1);
+        };
 
         _fileBtn.Content = App.Ledger is null ? "＋ 打开账本…" : "✕ 关闭账本";
         ShowStartOrContent();

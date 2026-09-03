@@ -10,6 +10,10 @@ namespace ZhangDan.App.Views;
 internal sealed class AccountsPage : PageBase
 {
     private LedgerSession S => App.Ledger!;
+
+    /// <summary>跳流水页并预置「只看该账户」(由 MainWindow 注入)。</summary>
+    public Action<long>? ViewAccountFlows { get; set; }
+
     private readonly TextBlock _summary = new() { FontWeight = FontWeights.SemiBold, FontSize = 15, Margin = new Thickness(4, 0, 0, 0) };
     private readonly ListView _list = new();
     private readonly Border _detail = new();
@@ -316,6 +320,12 @@ internal sealed class AccountsPage : PageBase
         btns.Children.Add(bEdit);
         btns.Children.Add(bCalib);
         btns.Children.Add(bTog);
+        if (ViewAccountFlows is not null)
+        {
+            var bFlow = new Button { Content = "该账户流水 →", MinWidth = 116, Height = 30, Margin = new Thickness(0, 10, 0, 0) };
+            bFlow.Click += (_, _) => ViewAccountFlows(id);
+            btns.Children.Add(bFlow);
+        }
         body.Children.Add(btns);
 
         body.Children.Add(Rule());
