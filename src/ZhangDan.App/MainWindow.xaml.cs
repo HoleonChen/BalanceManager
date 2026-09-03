@@ -17,14 +17,14 @@ public partial class MainWindow
         // 各导航页(P2/P3 逐个填充实现;P1 先占位)
         _pages = new PageBase[]
         {
-            new DayLedgerPage(),
+            new OverviewPage(),
             new FlowPage(),
             new PeriodsPage(),
             new AccountsPage(),
             new CategoriesPage(),
             new SettingsPage()
         };
-        ((DayLedgerPage)_pages[0]).GoTo = NavTo;
+        ((OverviewPage)_pages[0]).GoTo = NavTo;
         var flowPage = (FlowPage)_pages[1];
         ((AccountsPage)_pages[3]).ViewAccountFlows = id =>
         {
@@ -59,7 +59,7 @@ public partial class MainWindow
 
     private static int Index(string key) => key switch
     {
-        "day" => 0,
+        "overview" => 0,
         "flow" => 1,
         "periods" => 2,
         "accounts" => 3,
