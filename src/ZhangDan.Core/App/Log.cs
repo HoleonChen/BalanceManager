@@ -79,6 +79,30 @@ internal static class Log
         }
     }
 
+    /// <summary>
+    /// 清空日志目录下所有当日分片。先关掉当前打开的 writer 再删(否则 Windows 上文件被占用删不掉);
+    /// 之后首次写日志会自动重建当天文件。未配置文件 sink 或删除失败时静默。
+    /// </summary>
+    public static void Clear()
+    {
+        lock (Gate)
+        {
+            var dir = _dir;
+            if (dir is null)
+                return;
+            CloseWriterLocked();
+            try
+            {
+                foreach (var f in Directory.GetFiles(dir, "app-*.log"))
+                {
+                    try { File.Delete(f); }
+                    catch { /* 单文件删不掉不阻断整体 */ }
+                }
+            }
+            catch { /* 目录不可枚举时忽略 */ }
+        }
+    }
+
     private static void Write(LogLevel level, string line)
     {
         string text;

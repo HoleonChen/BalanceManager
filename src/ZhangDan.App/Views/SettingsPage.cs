@@ -36,6 +36,11 @@ internal sealed class SettingsPage : PageBase
 
         var logDirBtn = new Button { Content = "打开日志目录…", MinWidth = 130, Height = 32, HorizontalAlignment = HorizontalAlignment.Left };
         logDirBtn.Click += (_, _) => OpenLogDir();
+        var clearLogBtn = new Button { Content = "清空日志…", MinWidth = 130, Height = 32, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(10, 0, 0, 0) };
+        clearLogBtn.Click += (_, _) => ClearLogs();
+        var logRow = new StackPanel { Orientation = Orientation.Horizontal };
+        logRow.Children.Add(logDirBtn);
+        logRow.Children.Add(clearLogBtn);
 
         var panel = new StackPanel { Margin = new Thickness(24, 16, 24, 16), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Title("设置"));
@@ -128,7 +133,7 @@ internal sealed class SettingsPage : PageBase
             $"报表目录:{AppPaths.ReportDir}\n" +
             $"设置文件:{AppPaths.SettingsFile}\n" +
             $"日志目录:{AppPaths.LogDir}", new Thickness(0, 0, 0, 4)));
-        panel.Children.Add(logDirBtn);
+        panel.Children.Add(logRow);
 
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
@@ -231,6 +236,23 @@ internal sealed class SettingsPage : PageBase
         {
             Log.Error(ex, "打开日志目录");
             MessageBox.Show($"打开日志目录失败:\n{ex.Message}", "账单管理", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ClearLogs()
+    {
+        if (MessageBox.Show("清空日志目录下所有日志文件(app-*.log)?\n\n清空后新日志会继续写入。",
+                "清空日志", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+            return;
+        try
+        {
+            Log.Clear();
+            MessageBox.Show("日志已清空。", "清空日志", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "清空日志");
+            MessageBox.Show($"清空日志失败:\n{ex.Message}", "清空日志", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

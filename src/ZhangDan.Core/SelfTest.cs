@@ -120,7 +120,14 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
             if (File.ReadAllText(TodayLog()).Contains("不应落盘 info"))
                 throw new Exception("级别过滤失效:Error 级别下 Info 仍被写入。");
 
-            steps.Add("日志:按级别落盘/异常+上下文/级别过滤正确");
+            Log.Clear();
+            if (File.Exists(TodayLog()))
+                throw new Exception("日志清空失败:Clear 后当天文件仍存在。");
+            Log.Error("清空后重建探测");
+            if (!File.Exists(TodayLog()))
+                throw new Exception("日志清空后重建失败:再写未自动创建当天文件。");
+
+            steps.Add("日志:级别落盘/异常上下文/过滤/清空重建正确");
         }
         finally
         {
