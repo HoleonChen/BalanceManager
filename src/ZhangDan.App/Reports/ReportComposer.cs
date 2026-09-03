@@ -48,7 +48,10 @@ internal static class ReportComposer
         if (req.BlockTransfer)
             content.Sheets.Add(TransferSheet(s, scope));
         if (req.BlockPool && req.Kind == ReportRangeKind.Period && req.PeriodIds is { Length: 1 })
-            content.Sheets.Add(PoolSheet(s, req.PeriodIds[0]));
+        {
+            if (PoolSheet(s, req.PeriodIds[0]) is { } poolSheet)
+                content.Sheets.Add(poolSheet);
+        }
         if (req.Kind == ReportRangeKind.Compare)
             content.Sheets.Insert(0, CompareSheet(s, req, scope));
 
@@ -69,8 +72,9 @@ internal static class ReportComposer
             return (req.Start!, req.End!);
         long[] ids = req.PeriodIds!;
         var periods = ids.Select(id => Periods.Get(s, id)).Where(p => p is not null).Cast<PeriodRow>().ToList();
-        string f = periods.Min(p => p.StartDate);
-        string t = periods.Max(p => p.EndDate ?? DateTime.Today.ToString("yyyy-MM-dd"));
+        string f = periods.Min(p => p.StartDate) ?? DateTime.Today.ToString("yyyy-MM-dd");
+        string t = periods.Max(p => p.EndDate ?? DateTime.Today.ToString("yyyy-MM-dd"))
+                    ?? DateTime.Today.ToString("yyyy-MM-dd");
         return (f, t);
     }
 

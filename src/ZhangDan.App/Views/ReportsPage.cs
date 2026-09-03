@@ -116,7 +116,7 @@ internal sealed class ReportsPage : PageBase
             Busy(true);
             var (pdf, xlsx) = ReportExporter.Generate(S, req);
             Busy(false);
-            var paths = new List<string> { pdf, xlsx }.Where(x => x is not null).ToList();
+            var paths = new[] { pdf, xlsx }.Where(x => x is not null).Select(x => x!).ToList();
             MessageBox.Show(Window.GetWindow(this),
                 $"报表已生成:\n{string.Join("\n", paths)}",
                 "生成报表", MessageBoxButton.OK, MessageBoxImage.Information);
