@@ -45,7 +45,3 @@ internal sealed class FlowPage : PageBase
 }
 
 
-internal sealed class SettingsPage : PageBase
-{
-    public SettingsPage() => Content = Placeholder.Build("设置", "偏好/目录信息/数据自检将在 P3 落地。");
-}

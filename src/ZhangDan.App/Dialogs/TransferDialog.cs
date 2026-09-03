@@ -59,6 +59,9 @@ internal sealed class TransferDialog : Window
 
         if (edit is null)
         {
+            // 凌晨宽限(设置):0~6 点记转账默认记到「昨天」
+            if (settings.MidnightGraceEnabled && DateTime.Now.Hour < 6 && defaultDate.Date == DateTime.Today)
+                defaultDate = DateTime.Today.AddDays(-1);
             _datePicker.SelectedDate = defaultDate;
         }
         else

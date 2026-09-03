@@ -70,6 +70,9 @@ internal sealed class RecordDialog : Window
 
         if (edit is null)
         {
+            // 凌晨宽限(设置):0~6 点记一笔默认记到「昨天」——清晨补录前一晚的账
+            if (settings.MidnightGraceEnabled && DateTime.Now.Hour < 6 && defaultDate.Date == DateTime.Today)
+                defaultDate = DateTime.Today.AddDays(-1);
             _datePicker.SelectedDate = defaultDate;
         }
         else
