@@ -186,7 +186,7 @@ internal sealed class AccountCreateDialog : Window
     public AccountCreateDialog(AccountRow? existing = null)
     {
         Title = existing is null ? "新建账户" : "编辑账户";
-        Width = 480;
+        Width = 520;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -232,7 +232,7 @@ internal sealed class AccountCreateDialog : Window
 
     private static UIElement Row(string label, UIElement input)
     {
-        var text = new TextBlock { Text = label, Width = 150, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Text = label, Width = 140, VerticalAlignment = VerticalAlignment.Center };
         var d = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
         DockPanel.SetDock(text, Dock.Left);
         d.Children.Add(text);
