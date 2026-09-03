@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ZhangDan.App.Dialogs;
+using ZhangDan.App.Reporting;
 
 using WListView = Wpf.Ui.Controls.ListView;
 using WGridView = Wpf.Ui.Controls.GridView;
@@ -181,6 +182,40 @@ internal sealed class PeriodsPage : PageBase
         foreach (var r in ready)
             Periods.Seal(S, r.P.Id);
         Reload();
+        if (ready.Count == 1)
+            OfferReportFor(ready[0]);
+    }
+
+    /// <summary>封存单个周期后询问是否立即生成该周期报表(设计 §8「封存向导自动触发」的轻量等价)。</summary>
+    private void OfferReportFor(Row r)
+    {
+        var w = Window.GetWindow(this);
+        if (w is null)
+            return;
+        if (MessageBox.Show(w, $"已封存「{r.P.Name}」。是否生成该周期报表?", "封存周期",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+        try
+        {
+            var req = new ReportRequest
+            {
+                Kind = ReportRangeKind.Period,
+                PeriodIds = new[] { r.P.Id },
+                BlockOverview = true, BlockShare = true, BlockTrend = true, BlockAccounts = true,
+                BlockTop = true, BlockDaily = true, BlockPool = true, BlockTransfer = true,
+                ToPdf = true, ToXlsx = true,
+                SaveDir = AppPaths.ReportDir,
+                ScopeLabel = r.P.Name,
+                BaseName = $"{r.P.Name}_报表_{DateTime.Now:yyyyMMdd}"
+            };
+            var (pdf, xlsx) = ReportExporter.Generate(S, req);
+            MessageBox.Show(w, $"该周期报表已生成:\n{pdf}\n{xlsx}", "生成报表", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "封存后生成报表");
+            MessageBox.Show(w, $"生成报表失败:\n{ex.Message}", "生成报表", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     /// <summary>批量解除封存所选周期(已封存者)。</summary>

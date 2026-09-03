@@ -22,6 +22,7 @@ public partial class MainWindow
             new PeriodsPage(),
             new AccountsPage(),
             new CategoriesPage(),
+            new ReportsPage(),
             new SettingsPage()
         };
         ((OverviewPage)_pages[0]).GoTo = NavTo;
@@ -64,7 +65,8 @@ public partial class MainWindow
         "periods" => 2,
         "accounts" => 3,
         "categories" => 4,
-        "settings" => 5,
+        "reports" => 5,
+        "settings" => 6,
         _ => 0
     };
 

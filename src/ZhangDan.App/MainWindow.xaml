@@ -37,6 +37,9 @@
                     <Button Tag="categories" Content="🏷️  分类" Click="Nav_Click"
                             HorizontalContentAlignment="Left" Height="42" Padding="18,0,0,0"
                             Background="Transparent" BorderThickness="0" FontSize="15"/>
+                    <Button Tag="reports" Content="📊  报表" Click="Nav_Click"
+                            HorizontalContentAlignment="Left" Height="42" Padding="18,0,0,0"
+                            Background="Transparent" BorderThickness="0" FontSize="15"/>
                     <Button x:Name="_navSettings" Tag="settings" Content="⚙️  设置" Click="Nav_Click"
                             HorizontalContentAlignment="Left" Height="42" Padding="18,0,0,0"
                             Background="Transparent" BorderThickness="0" FontSize="15"/>

@@ -81,6 +81,10 @@ internal static class ReportStore
     {
         var list = Load(s);
         list.RemoveAll(x => x.Id == id);
-        s.SetMeta(Key, JsonSerializer.Serialize(list));
+        Save(s, list);
     }
+
+    /// <summary>整表覆写(「重新生成」就地改一条时用)。</summary>
+    public static void Save(LedgerSession s, List<ReportHistoryEntry> list)
+        => s.SetMeta(Key, JsonSerializer.Serialize(list));
 }
