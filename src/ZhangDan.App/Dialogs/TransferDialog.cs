@@ -36,7 +36,7 @@ internal sealed class TransferDialog : Window
     {
         _accounts = new List<AccountRow>(Accounts.ListEnabled(ledger));
         Title = edit is null ? "记转账" : "编辑转账";
-        Width = 520;
+        Width = 600;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
