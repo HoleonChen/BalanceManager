@@ -191,8 +191,10 @@ INSERT OR IGNORE INTO categories (id, parent_id, name, color, sort_order, kind) 
             || txRow.DeltaCents != 50 || txRow.Kind != "理财结算")
             throw new Exception("转账写入/展示字段不符。");
         var (outAll, inAll) = Transactions.DayTotals(s, date);
-        if (outAll != 0 || inAll != 0)
-            throw new Exception("转账被错误计入收支合计。");
+        // 当天除转账外还有一笔 ¥120 早餐支出(尚未作废):转账不应并入收支合计,
+        // 故合计应仍为 (12000, 0) —— 与转账前一致,而非凭空变 0。
+        if (outAll != 12000 || inAll != 0)
+            throw new Exception($"转账后当日收支合计异常(期望 12000/0 且转账不计入,实际 {outAll}/{inAll})。");
         steps.Add("转账:本金/Δ/类别存库,收支合计不受影响");
 
         // 作废:支出一笔撤出列表与合计(转账仍在,但不影响收支合计)
