@@ -15,6 +15,10 @@ internal sealed class SettingsPage : PageBase
     private readonly CheckBox _grace = new() { Margin = new Thickness(0, 2, 0, 0) };
     private readonly TextBlock _selfResult = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
 
+    /// <summary>设置主区与「关于」子页的宿主(在设置导航内切换)。</summary>
+    private readonly ContentControl _host = new();
+    private ScrollViewer _mainScroll = null!;
+
     /// <summary>强调色预设(首个 = 默认钢蓝,对应旧版外观,点它即还原)。</summary>
     private static readonly string[] AccentPresets =
     {
@@ -135,7 +139,34 @@ internal sealed class SettingsPage : PageBase
             $"日志目录:{AppPaths.LogDir}", new Thickness(0, 0, 0, 4)));
         panel.Children.Add(logRow);
 
-        Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        panel.Children.Add(Section("关于"));
+        var aboutBtn = new Button { Content = "关于账单管理 →", MinWidth = 170, Height = 32, HorizontalAlignment = HorizontalAlignment.Left };
+        aboutBtn.Click += (_, _) => OpenAbout();
+        panel.Children.Add(aboutBtn);
+
+        _mainScroll = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        _host.Content = _mainScroll;
+        Content = _host;
+    }
+
+    private void OpenAbout()
+    {
+        _host.Content = new AboutSubView(back: () =>
+        {
+            _host.Content = _mainScroll;
+            RefreshLedgerInfo();
+        });
+    }
+
+    private void RefreshLedgerInfo()
+    {
+        if (App.Ledger is null)
+        {
+            _ledgerInfo.Text = "未打开账本。";
+            return;
+        }
+        var size = new FileInfo(App.Ledger.Path).Length;
+        _ledgerInfo.Text = $"账本名:{App.Ledger.Name}\n账本文件:{App.Ledger.Path}  ({size / 1024.0:0.0} KB)";
     }
 
     private static TextBlock Title(string text) => new()
@@ -172,16 +203,7 @@ internal sealed class SettingsPage : PageBase
         return t;
     }
 
-    public override void OnShown()
-    {
-        if (App.Ledger is null)
-        {
-            _ledgerInfo.Text = "未打开账本。";
-            return;
-        }
-        var size = new FileInfo(App.Ledger.Path).Length;
-        _ledgerInfo.Text = $"账本名:{App.Ledger.Name}\n账本文件:{App.Ledger.Path}  ({size / 1024.0:0.0} KB)";
-    }
+    public override void OnShown() => RefreshLedgerInfo();
 
     private void SaveAppearance(RadioButton rb)
     {
