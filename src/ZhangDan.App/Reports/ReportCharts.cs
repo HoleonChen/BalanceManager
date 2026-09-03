@@ -5,25 +5,27 @@ using ScottPlot;
 namespace ZhangDan.App.Reporting;
 
 /// <summary>
-/// 图表渲染(ScottPlot 5 → PNG 字节,纯头less,供 PDF 嵌入)。任一出错返回 null,由调用方降级为文字。
+/// 图表渲染(ScottPlot 5 → PNG 字节,headless,供 PDF 嵌入)。任一出错返回 null,由调用方降级为文字。
+/// 中文:Windows 上给各文字元素设 FontName=Microsoft YaHei(或 Font.Automatic 自动挑选)。
 /// </summary>
 internal static class ReportCharts
 {
     /// <summary>
-    /// 跨周期堆叠面积:每一列 = 一个周期(x=按时间序);类别自下而上堆叠;
-    /// 相邻两条上边界之间为淡色半透明带(categories.color vivid 线省略,见阅读说明)。
-    /// percent=true 时每列按自身总额归一为 %。返回 PNG 字节,失败 null。
+    /// 跨周期堆叠面积:每列=一个周期(x 轴按时间序),类别自下而上堆叠为淡色半透明带,带顶勾鲜艳折线;
+    /// 底轴 tick 打周期名,x 轴标题「周期(按时间序)」;图例=各分类色块。percent 时各列按自身总额归一 %。
     /// </summary>
     public static byte[]? StackedArea(
         IReadOnlyList<string> columnNames,
         IReadOnlyList<(string Name, string Hex)> categories,
-        double[,] cents,        // cents[category, column]
+        double[,] cents,
         bool percent)
     {
         try
         {
             int n = columnNames.Count;
             int m = categories.Count;
+            if (n == 0 || m == 0)
+                return null;
             var plot = new Plot();
 
             double[] totals = new double[n];
@@ -46,20 +48,97 @@ internal static class ReportCharts
                     top[j] = bottom[j] + v;
                 }
                 double[] xs = ScottPlot.Generate.Consecutive(n);
+                var vivid = HexColor(categories[i].Hex);
                 var fill = plot.Add.FillY(xs, bottom, top);
-                fill.FillColor = HexColor(categories[i].Hex).WithAlpha(70);
+                fill.FillColor = vivid.WithAlpha(60);
+                // 带顶 = 本类上边界,鲜艳折线读趋势
+                var line = plot.Add.ScatterLine(xs, top, vivid);
+                line.LineWidth = 1.5f;
+                line.LegendText = categories[i].Name;
                 bottom = top;
             }
 
+            plot.ShowLegend();
+            StyleChinese(plot);
+
+            plot.Axes.Bottom.SetTicks(xsOf(n), ToArray(columnNames));   // x=按时间序的周期
+            plot.Axes.Bottom.TickLabelStyle.Rotation = 30;
+            plot.Axes.Bottom.TickLabelStyle.Alignment = Alignment.MiddleRight;
+            plot.Axes.Bottom.MinimumSize = 30;
+            plot.Axes.Bottom.Label.Text = "周期(按时间序)";
+            plot.Axes.Left.Label.Text = percent ? "占比 %" : "金额(元)";
             plot.Axes.AutoScale();
-            plot.YLabel(percent ? "占比 %" : "金额(元)");
-            var image = plot.GetImageBytes(920, 430);
-            return image;
+            return plot.GetImageBytes(960, 460);
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>支出分类占比饼图(每类一块,颜色取分类色;未归类灰块)。返回 PNG,失败 null。</summary>
+    public static byte[]? Pie(IReadOnlyList<(string Name, string Hex, double Cents)> slices)
+    {
+        try
+        {
+            if (slices.Count == 0)
+                return null;
+            var plot = new Plot();
+            var pieSlices = new List<PieSlice>();
+            foreach (var s in slices)
+            {
+                pieSlices.Add(new PieSlice
+                {
+                    Value = s.Cents,
+                    FillColor = HexColor(s.Hex),
+                    LegendText = s.Name
+                });
+            }
+            var pie = plot.Add.Pie(pieSlices);
+            pie.ExplodeFraction = 0.02;
+            plot.ShowLegend();
+            plot.Axes.Frameless();
+            plot.HideGrid();
+            StyleChinese(plot);
+            return plot.GetImageBytes(520, 380);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void StyleChinese(Plot plot)
+    {
+        const string font = "Microsoft YaHei";
+        try
+        {
+            plot.Font.Automatic();   // 自动为各文本元素挑选含中文的字体
+        }
+        catch { /* 低版本无此 API 则忽略,下面仍逐项设 */ }
+        try
+        {
+            plot.Axes.Left.TickLabelStyle.FontName = font;
+            plot.Axes.Bottom.TickLabelStyle.FontName = font;
+            plot.Axes.Left.Label.FontName = font;
+            plot.Axes.Bottom.Label.FontName = font;
+            plot.Legend.FontName = font;
+        }
+        catch { /* 名称差异忽略 */ }
+    }
+
+    private static double[] xsOf(int n)
+    {
+        var a = new double[n];
+        for (int i = 0; i < n; i++) a[i] = i;
+        return a;
+    }
+
+    private static string[] ToArray(IReadOnlyList<string> xs)
+    {
+        var a = new string[xs.Count];
+        for (int i = 0; i < xs.Count; i++) a[i] = xs[i];
+        return a;
     }
 
     private static Color HexColor(string hex)

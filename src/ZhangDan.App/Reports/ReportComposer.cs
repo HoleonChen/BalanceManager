@@ -33,7 +33,7 @@ internal static class ReportComposer
         if (req.BlockOverview)
             content.Sheets.Add(OverviewSheet(s, req, scope));
         if (req.BlockShare)
-            content.Sheets.Add(ShareSheet(s, scope));
+            AddShare(content, s, scope);
         if (req.BlockTrend)
             AddTrend(content, s, req, scope);
         if (req.BlockAccounts)
@@ -95,7 +95,8 @@ internal static class ReportComposer
         return new ReportSheet("总览", new[] { "指标", "金额(元)" }, rows);
     }
 
-    private static ReportSheet ShareSheet(LedgerSession s, ZhangDan.Reports.Scope scope)
+    /// <summary>占比表 + 同步生成饼图 PNG(颜色取分类色,未归类灰块)。</summary>
+    private static void AddShare(ReportContent content, LedgerSession s, ZhangDan.Reports.Scope scope)
     {
         var share = Reports.ExpenseShare(s, scope);
         long total = share.Sum(r => r.Cents);
@@ -106,7 +107,12 @@ internal static class ReportComposer
             Fmt(r.Cents),
             total > 0 ? (r.Cents * 100.0 / total).ToString("0.0") + "%" : "-"
         }).ToList();
-        return new ReportSheet("支出分类占比", new[] { "分类", "说明", "金额(元)", "占支出比" }, rows);
+        content.Sheets.Add(new ReportSheet("支出分类占比", new[] { "分类", "说明", "金额(元)", "占支出比" }, rows));
+
+        var slices = share.Where(r => r.Cents > 0)
+                          .Select(r => (r.Name, r.Color, (double)r.Cents)).ToList();
+        if (slices.Count > 0)
+            content.SharePng = ReportCharts.Pie(slices);
     }
 
     private static void AddTrend(ReportContent content, LedgerSession s, ReportRequest req, ZhangDan.Reports.Scope scope)
