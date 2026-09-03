@@ -137,6 +137,9 @@ internal sealed class PeriodsPage : PageBase
         try
         {
             Periods.Update(S, r.P.Id, dlg.PeriodName, dlg.StartDate, dlg.EndDate);
+            // 编辑态资金池:已有池 → 改;无池勾选 → 补建;保存走 upsert
+            if (dlg.UsePool)
+                Pools.Save(S, r.P.Id, "生活费", dlg.PoolAccountId, dlg.PoolBudgetCents, dlg.PoolReserveCents);
             Reload();
         }
         catch (Exception ex)
