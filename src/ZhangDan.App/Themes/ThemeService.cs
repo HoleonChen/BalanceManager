@@ -63,6 +63,7 @@ internal static class ThemeService
             ? new Uri("Themes/Dark.xaml", UriKind.Relative)
             : new Uri("Themes/Light.xaml", UriKind.Relative);          // 自绘语义色原地换源
         RebuildAccentOverlay();
+        SyncWpfUiAccent();
         CheckParityOnce();
     }
 
@@ -123,6 +124,30 @@ internal static class ThemeService
         AccentOverlay[UiKeys.AccentSubtleBg] = new SolidColorBrush(subtle);
         AccentOverlay[UiKeys.CalendarTodayBg] = new SolidColorBrush(subtle);
         AccentOverlay[UiKeys.CalendarPeriodBg] = new SolidColorBrush(period);
+    }
+
+    /// <summary>
+    /// 让 WPF-UI 控件镀层吃到同样的强调色:用户自选 → Apply(accent, theme);默认钢蓝 → 还原系统强调色。
+    /// 失败静默(不挡换肤)。收入绿/支出红/逾期橙与强调色无关,不受影响。
+    /// </summary>
+    private static void SyncWpfUiAccent()
+    {
+        try
+        {
+            if (AccentHex == DefaultAccentHex)
+            {
+                ApplicationAccentColorManager.ApplySystemAccent();
+                return;
+            }
+            var c = AccentColor();
+            if (Effective == ApplicationTheme.Dark && Luminance(c) < 0.28)
+                c = Lerp(c, Colors.White, 0.25);
+            ApplicationAccentColorManager.Apply(c, Effective, true);
+        }
+        catch
+        {
+            // WPF-UI 强调色失败不影响自绘配色
+        }
     }
 
     /// <summary>跟随系统实时切肤:仅 System 模式生效;失败仅失去实时跟随(重启/重进设置仍正确)。</summary>

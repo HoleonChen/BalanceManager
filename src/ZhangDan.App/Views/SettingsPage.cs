@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 
 namespace ZhangDan.App.Views;
 
@@ -12,6 +14,12 @@ internal sealed class SettingsPage : PageBase
     private readonly TextBlock _ledgerInfo = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
     private readonly CheckBox _grace = new() { Margin = new Thickness(0, 2, 0, 0) };
     private readonly TextBlock _selfResult = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+
+    /// <summary>强调色预设(首个 = 默认钢蓝,对应旧版外观,点它即还原)。</summary>
+    private static readonly string[] AccentPresets =
+    {
+        "#4682B4", "#E91E63", "#9C27B0", "#3F51B5", "#009688", "#4CAF50", "#FF9800", "#795548"
+    };
 
     public SettingsPage()
     {
@@ -56,6 +64,55 @@ internal sealed class SettingsPage : PageBase
         }
         panel.Children.Add(themeRow);
         panel.Children.Add(Hint("选「跟随系统」时,随 Windows 深浅色实时切换。", new Thickness(0, 2, 0, 4)));
+
+        // —— 强调色:预设圆点选择 + 即时预览(预览控件本身用动态强调色键,换色即变)——
+        var accentCaption = new TextBlock { Text = "强调色", FontSize = 13, Margin = new Thickness(0, 6, 0, 2) };
+        accentCaption.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.TextSection);
+        panel.Children.Add(accentCaption);
+
+        var chips = new List<(Border Holder, string Hex)>();
+        var currentAccent = App.Settings.Accent ?? ThemeService.DefaultAccentHex;
+        var accentWrap = new WrapPanel { Margin = new Thickness(0, 0, 0, 2) };
+        foreach (var hex in AccentPresets)
+        {
+            var dot = new Border
+            {
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(HexColor(hex)),
+                Cursor = Cursors.Hand,
+                Tag = hex
+            };
+            var holder = new Border
+            {
+                Width = 32,
+                Height = 32,
+                CornerRadius = new CornerRadius(16),
+                Margin = new Thickness(0, 0, 4, 6),
+                Background = Brushes.Transparent,
+                Child = dot
+            };
+            holder.SetResourceReference(Border.BorderBrushProperty, UiKeys.TextPrimary);
+            holder.BorderThickness = hex == currentAccent ? new Thickness(2) : new Thickness(0);
+            var tag = hex;
+            dot.MouseLeftButtonUp += (_, _) => SaveAccent(tag, chips);
+            chips.Add((holder, hex));
+            accentWrap.Children.Add(holder);
+        }
+        panel.Children.Add(accentWrap);
+
+        var previewText = new TextBlock { Text = "预览:今天 · 链接 · 选中高亮", FontSize = 12 };
+        previewText.SetResourceReference(TextBlock.ForegroundProperty, UiKeys.Accent);
+        var preview = new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 6, 10, 6),
+            Margin = new Thickness(0, 0, 0, 4),
+            Child = previewText
+        };
+        preview.SetResourceReference(Border.BackgroundProperty, UiKeys.AccentSubtleBg);
+        panel.Children.Add(preview);
 
         panel.Children.Add(Section("数据自检"));
         panel.Children.Add(selfBtn);
@@ -128,6 +185,31 @@ internal sealed class SettingsPage : PageBase
         App.Settings.ThemeMode = tag;
         App.Settings.Save();
         ThemeService.Apply(ThemeService.ParseMode(tag));
+    }
+
+    private void SaveAccent(string hex, List<(Border Holder, string Hex)> chips)
+    {
+        // 默认钢蓝等价于未自选(此时 WPF-UI 控件吃系统强调色)
+        App.Settings.Accent = hex == ThemeService.DefaultAccentHex ? null : hex;
+        App.Settings.Save();
+
+        var cur = App.Settings.Accent ?? ThemeService.DefaultAccentHex;
+        foreach (var (holder, h) in chips)
+            holder.BorderThickness = h == cur ? new Thickness(2) : new Thickness(0);
+
+        ThemeService.Apply(ThemeService.Mode, hex);
+    }
+
+    private static Color HexColor(string hex)
+    {
+        try
+        {
+            return (Color)ColorConverter.ConvertFromString(hex);
+        }
+        catch
+        {
+            return (Color)ColorConverter.ConvertFromString(ThemeService.DefaultAccentHex);
+        }
     }
 
     private void SaveGrace(bool enabled)
